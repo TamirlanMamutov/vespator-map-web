@@ -251,17 +251,15 @@ test("world coordinates keep the outer perimeter and never overlap", () => {
   assert.ok(at("gj_3378b").y > at("atacama").y && at("gj_3378b").x > at("harvest").x);
 });
 
-test("power matrices match the campaign record", () => {
+test("power matrices are complete and within the 1-4 Crusade range", () => {
+  // Exact values are live War Council state (Cloud Uplink publishes change them), so only the shape is pinned here.
   const data = fresh();
-  const power = (id) => planetById(data, id).powerLevels;
-  assert.deepEqual(power("niflegard"), { Imperium: 1, Xenos: 4, Chaos: 1 });
-  assert.deepEqual(power("myrkvidr"), { Imperium: 1, Xenos: 2, Chaos: 1 });
-  assert.deepEqual(power("knossos"), { Imperium: 1, Xenos: 3, Chaos: 1 });
-  assert.deepEqual(power("sarif_iv"), { Imperium: 1, Xenos: 3, Chaos: 2 });
-  assert.deepEqual(power("pluto_ii"), { Imperium: 1, Xenos: 1, Chaos: 4 });
-  assert.deepEqual(power("gj_3378b"), { Imperium: 4, Xenos: 3, Chaos: 1 });
   for (const planet of data.planets) {
-    for (const alliance of ALLIANCES) assert.ok(planet.powerLevels[alliance] >= 1 && planet.powerLevels[alliance] <= 4);
+    assert.deepEqual(Object.keys(planet.powerLevels).sort(), [...ALLIANCES].sort(), planet.id);
+    for (const alliance of ALLIANCES) {
+      const level = planet.powerLevels[alliance];
+      assert.ok(Number.isInteger(level) && level >= 1 && level <= 4, `${planet.id} ${alliance}=${level}`);
+    }
   }
 });
 
@@ -312,8 +310,15 @@ test("Power Levels are set per alliance and clamped to 1-4", () => {
   assert.equal(setPowerLevel(data, "sidon", "Xenos", 9), 4);
   assert.equal(setPowerLevel(data, "sidon", "Chaos", -3), 1);
   assert.throws(() => setPowerLevel(data, "sidon", "Tyranids", 2), /Unknown alliance/);
+  // Fix the levels locally: campaign_data.json is live War Council state and changes between publishes.
+  setPowerLevel(data, "pluto_ii", "Imperium", 2);
+  setPowerLevel(data, "pluto_ii", "Xenos", 1);
+  setPowerLevel(data, "pluto_ii", "Chaos", 7);
   const planet = planetById(data, "pluto_ii");
+  assert.deepEqual(planet.powerLevels, { Imperium: 2, Xenos: 1, Chaos: 4 });
   assert.equal(dominantAlliance(planet), "Chaos");
+  setPowerLevel(data, "pluto_ii", "Imperium", 4);
+  assert.equal(dominantAlliance(planet), null, "tied top levels leave the world contested");
 });
 
 test("validation rejects bad power, slot counts and faction mismatches", () => {
