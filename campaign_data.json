@@ -54,7 +54,13 @@
         "delvesite_facility",
         "desolate_wastes"
       ],
-      "fleets": [],
+      "fleets": [
+        {
+          "alliance": "Xenos",
+          "faction": "Aeldari",
+          "badge": "aeldari_cruiser"
+        }
+      ],
       "destroyed": false
     },
     {
@@ -138,7 +144,10 @@
             "type": "Xenos Stronghold",
             "alliance": "Xenos"
           },
-          "empty"
+          {
+            "type": "Fortification Line",
+            "alliance": "Imperium"
+          }
         ]
       },
       "terrain": "Delvesite Facility & Dead Lands",
@@ -175,7 +184,10 @@
             "type": "Support Facility",
             "alliance": "Xenos"
           },
-          "empty"
+          {
+            "type": "Fortification Line",
+            "alliance": "Xenos"
+          }
         ]
       },
       "terrain": "Forge Complex & Xenoflora Plains",
@@ -189,7 +201,19 @@
         "xenoflora_jungle",
         "desolate_wastes"
       ],
-      "fleets": [],
+      "fleets": [
+        {
+          "alliance": "Xenos",
+          "faction": "Necrons",
+          "badge": "necron_scythe",
+          "name": "The Sekhemet Dynasty"
+        },
+        {
+          "alliance": "Imperium",
+          "faction": "Imperial Knights",
+          "badge": "imperial_cruiser"
+        }
+      ],
       "destroyed": false
     },
     {
@@ -225,18 +249,7 @@
         "hab_sprawl",
         "xenoflora_jungle"
       ],
-      "fleets": [
-        {
-          "alliance": "Xenos",
-          "faction": "Necrons",
-          "badge": "necron_scythe"
-        },
-        {
-          "alliance": "Xenos",
-          "faction": "Aeldari",
-          "badge": "aeldari_cruiser"
-        }
-      ],
+      "fleets": [],
       "destroyed": false
     },
     {
@@ -272,13 +285,7 @@
         "dead_lands",
         "desolate_wastes"
       ],
-      "fleets": [
-        {
-          "alliance": "Chaos",
-          "faction": "Thousand Sons",
-          "badge": "chaos_grand_cruiser"
-        }
-      ],
+      "fleets": [],
       "destroyed": false
     },
     {
@@ -299,8 +306,14 @@
             "type": "Fortification Line",
             "alliance": "Chaos"
           },
-          "empty",
-          "empty"
+          {
+            "type": "Support Facility",
+            "alliance": "Chaos"
+          },
+          {
+            "type": "Staging Grounds",
+            "alliance": "Chaos"
+          }
         ]
       },
       "terrain": "Xenoflora Jungle",
@@ -312,7 +325,13 @@
         "xenoflora_jungle",
         "dead_lands"
       ],
-      "fleets": [],
+      "fleets": [
+        {
+          "alliance": "Chaos",
+          "faction": "Thousand Sons",
+          "badge": "chaos_grand_cruiser"
+        }
+      ],
       "destroyed": false
     },
     {
@@ -346,7 +365,14 @@
         "tomb_complex",
         "desolate_wastes"
       ],
-      "fleets": [],
+      "fleets": [
+        {
+          "alliance": "Chaos",
+          "faction": "Death Guard",
+          "badge": "chaos_grand_cruiser",
+          "name": "Dysthymic March"
+        }
+      ],
       "destroyed": false
     },
     {
@@ -367,7 +393,10 @@
             "type": "Chaos Stronghold",
             "alliance": "Chaos"
           },
-          "empty",
+          {
+            "type": "Fortification Line",
+            "alliance": "Chaos"
+          },
           "empty"
         ]
       },
@@ -382,7 +411,14 @@
         "delvesite_facility",
         "dead_lands"
       ],
-      "fleets": [],
+      "fleets": [
+        {
+          "alliance": "Imperium",
+          "faction": "Imperial Guard",
+          "badge": "imperial_battleship",
+          "name": "42nd Cadian Guard Motorized Corps"
+        }
+      ],
       "destroyed": false
     },
     {
@@ -492,18 +528,7 @@
         "rad_zone",
         "spaceport"
       ],
-      "fleets": [
-        {
-          "alliance": "Imperium",
-          "faction": "Imperial Knights",
-          "badge": "imperial_cruiser"
-        },
-        {
-          "alliance": "Imperium",
-          "faction": "Imperial Guard",
-          "badge": "imperial_battleship"
-        }
-      ],
+      "fleets": [],
       "destroyed": false
     }
   ],
@@ -583,16 +608,22 @@
   ],
   "offensiveVectors": [
     {
-      "from": "gj_3378b",
+      "from": "harvest",
       "to": "harvest",
-      "alliance": "Imperium",
-      "label": "Crusade Spearhead"
+      "alliance": "Xenos",
+      "label": "Purge and Burn: Chaos"
     },
     {
-      "from": "pluto_ii",
-      "to": "pluto_ii",
-      "alliance": "Chaos",
-      "label": "Orbital Bombardment"
+      "from": "harvest",
+      "to": "gj_3378b",
+      "alliance": "Imperium",
+      "label": "Sieze Power Base: Chaos"
+    },
+    {
+      "from": "atacama",
+      "to": "atacama",
+      "alliance": "Imperium",
+      "label": "Sieze Power Base: Chaos"
     }
   ],
   "activeKillTeams": []
