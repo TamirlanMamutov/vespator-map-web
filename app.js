@@ -4,6 +4,8 @@ import {
   setPowerLevel, setInfrastructureCapacity, setSlot, fleetTitle, constructInfrastructure, infrastructureType,
   commissionFleet, decommissionFleet, canTransfer, moveFleet, setDestroyed, serializeCampaign,
   activeVectors, assaultTargets, launchAssault, recallAssault, assaultTitle, isOrbitalStrike,
+  deployKillTeam, extractKillTeam, activeKillTeams, killTeamTitle, KILL_TEAM_CODENAMES,
+  STORAGE_KEY, campaignFingerprint, packState, unpackState,
 } from "./campaign.js";
 import {
   EMBLEMS, TERRAIN_GLYPHS, SHIP_SILHOUETTES, ALLIANCE_EMBLEMS, INFRASTRUCTURE_EMBLEMS,
@@ -32,6 +34,10 @@ let suppressClick = false;
 let tagLayout = new Map();
 let recentExterminatus = null;
 let recentConstruction = null;
+let recentKillTeam = null;
+let baseline = null;
+let storageHealthy = true;
+let killTeamHost = null;
 let threeView = null;
 let threeActive = false;
 let threeLoading = false;
@@ -129,6 +135,36 @@ const designation = (planet) => `VF-${pad(campaign.planets.indexOf(planet) + 1, 
 const currentPlanet = () => planetById(campaign, selectedId);
 const shorten = (value, length) => value.length > length ? `${value.slice(0, length - 1)}…` : value;
 
+// ---------- Auto-persistence (localStorage) ----------
+// Every successful Warmaster edit is written to localStorage so a refresh or restart resumes the live campaign.
+function persistState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, packState(campaign, { baseline, dirty }));
+    storageHealthy = true;
+  } catch (error) {
+    storageHealthy = false;
+    report(`AUTO-SAVE FAILED (${error.message}). Changes live in this tab only — EXPORT COGITATOR STATE before closing.`, true);
+  }
+  return storageHealthy;
+}
+
+function readStoredState() {
+  let raw;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch { return null; }
+  if (!raw) return null;
+  try {
+    return unpackState(raw);
+  } catch (error) {
+    console.warn(`Discarding unreadable ${STORAGE_KEY}: ${error.message}`);
+    clearStoredState();
+    return null;
+  }
+}
+
+function clearStoredState() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+}
+
 // ---------- State changes ----------
 function mutate(action, message) {
   if (!warmaster) { report("Command denied: authorize Warmaster override first.", true); return; }
@@ -137,8 +173,9 @@ function mutate(action, message) {
     action();
     validateCampaign(campaign);
     dirty = true;
+    const saved = persistState();
     render();
-    report(message);
+    if (saved) report(message);
     return true;
   } catch (error) {
     campaign = before;
@@ -155,7 +192,22 @@ function confirmAction(title, message, accept) {
   $("confirm-accept").textContent = accept;
   dialog.returnValue = "";
   dialog.showModal();
-  return new Promise((resolve) => dialog.addEventListener("close", () => resolve(dialog.returnValue === "accept"), { once: true }));
+  // Some embedded Chromium builds skip the dialog "close" event, so also settle on the form submit/cancel.
+  return new Promise((resolve) => {
+    const form = dialog.querySelector("form");
+    const settle = (accepted) => {
+      form.removeEventListener("submit", onSubmit);
+      dialog.removeEventListener("cancel", onCancel);
+      dialog.removeEventListener("close", onClose);
+      resolve(accepted);
+    };
+    const onSubmit = (event) => settle(event.submitter?.value === "accept");
+    const onCancel = () => settle(false);
+    const onClose = () => settle(dialog.returnValue === "accept");
+    form.addEventListener("submit", onSubmit);
+    dialog.addEventListener("cancel", onCancel);
+    dialog.addEventListener("close", onClose);
+  });
 }
 
 function selectPlanet(id, focus = false) {
@@ -183,9 +235,12 @@ function render() {
   $("mode-badge").classList.toggle("admin", warmaster);
   $("override").textContent = warmaster ? "◇ LOCK COMMAND" : "◇ WARMASTER OVERRIDE";
   $("export").hidden = !warmaster;
+  $("reset-state").hidden = !warmaster;
   $("export").classList.toggle("pending", dirty);
   $("unsaved").classList.toggle("dirty", dirty);
-  $("unsaved").textContent = dirty ? "UNEXPORTED CHANGES — local memory only. Use EXPORT COGITATOR STATE before closing." : "Source: campaign_data.json";
+  $("unsaved").textContent = !dirty ? "Source: campaign_data.json"
+    : storageHealthy ? "LIVE STATE AUTO-SAVED to this browser. EXPORT COGITATOR STATE to publish it to campaign_data.json."
+      : "UNEXPORTED CHANGES — auto-save unavailable, local memory only. Export before closing.";
   updateHint();
   updateVectorToggle();
   threeView?.update(campaign, selectedId);
@@ -243,6 +298,7 @@ function renderIndex() {
     planet.name, planet.subName, planet.id, planet.terrain, ...planet.terrainTwists,
     ...(planet.terrainIcons || []).map((icon) => TERRAIN_GLYPHS[glyphKey(icon)].label),
     ...planet.fleets.flatMap((fleet) => [fleetTitle(fleet), fleet.faction, fleet.alliance]),
+    ...(campaign.activeKillTeams || []).filter((operation) => operation.target === planet.id).flatMap((operation) => [operation.codename, "kill team"]),
     ...planet.infrastructure.slots.map(slotInfo).filter((slot) => !slot.empty).flatMap((slot) => [slot.type, slot.alliance]),
     planet.destroyed ? "destroyed exterminatus" : "",
   ].join(" ").toLowerCase().includes(query));
@@ -543,6 +599,8 @@ function renderMap() {
   const nodes = [];
   const tags = [];
   const fleets = [];
+  const covert = [];
+  const operations = activeKillTeams(campaign);
   for (const planet of campaign.planets) {
     const p = pos(planet);
     const rect = tagLayout.get(planet.id);
@@ -551,6 +609,17 @@ function renderMap() {
     connectors.push(vector("line", { x1: p.x + Math.cos(angle) * 32, y1: p.y + Math.sin(angle) * 32, x2: anchor.x, y2: anchor.y, class: "connector" }));
     nodes.push(renderNode(planet, p, angle));
     tags.push(renderTag(planet, rect));
+    operations.filter((operation) => operation.target === planet.id).forEach((operation, index) => {
+      // Covert markers sit on the flank between the tag connector and the orbit bracket.
+      const around = angle + Math.PI / 2 - index * 0.5;
+      const title = killTeamTitle(campaign, operation);
+      const marker = vector("g", {
+        transform: `translate(${(p.x + Math.cos(around) * 50).toFixed(1)} ${(p.y + Math.sin(around) * 50).toFixed(1)})`,
+        class: "covert-marker", style: `color:${color(operation.alliance)}`, "data-planet": planet.id, "data-operation": operation.id, "data-alliance": operation.alliance,
+      });
+      marker.append(vector("title", {}, `${title}\nCOVERT OPERATION ACTIVE`), vector("circle", { r: 11.5, class: "covert-disc" }), emblemGroup("killTeam", 17));
+      covert.push(marker);
+    });
     const awayAngle = angle + Math.PI;
     planet.fleets.forEach((fleet, index) => {
       const spread = (index - (planet.fleets.length - 1) / 2) * 0.62;
@@ -578,6 +647,7 @@ function renderMap() {
   $("systems").replaceChildren(...nodes);
   $("tags").replaceChildren(...tags);
   $("fleet-markers").replaceChildren(...fleets);
+  $("covert-markers").replaceChildren(...covert);
 }
 
 function renderNode(planet, p, tagAngle) {
@@ -604,6 +674,7 @@ function renderNode(planet, p, tagAngle) {
   }
   if (recentExterminatus?.id === planet.id && Date.now() - recentExterminatus.time < 2000) node.append(vector("circle", { r: 30, class: "shockwave" }));
   if (recentConstruction?.id === planet.id && Date.now() - recentConstruction.time < CONSTRUCTION_MS) node.append(constructionEffect(recentConstruction.alliance));
+  if (recentKillTeam?.id === planet.id && Date.now() - recentKillTeam.time < KILLTEAM_MS) node.append(killTeamEffect(recentKillTeam.alliance, recentKillTeam.codename));
   node.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectPlanet(planet.id); $("dossier").focus(); }
   });
@@ -643,6 +714,55 @@ function playConstruction(planetId, alliance) {
   setTimeout(() => {
     if (recentConstruction?.id === planetId && Date.now() - recentConstruction.time >= CONSTRUCTION_MS) { recentConstruction = null; renderMap(); }
   }, CONSTRUCTION_MS + 50);
+}
+
+const KILLTEAM_MS = 3200;
+
+// 2D kill team insertion: a sniper reticle locks on, phosphor scanlines sweep the world, three stealth chevrons
+// contract into the core and leave a covert skull/dagger badge.
+function killTeamEffect(alliance, codename = "") {
+  const group = vector("g", { class: "killteam-effect", style: `color:${color(alliance)}`, "data-alliance": alliance, "aria-hidden": "true" });
+  const clip = `kt-clip-${Math.random().toString(36).slice(2, 8)}`;
+  const defs = vector("defs");
+  const clipPath = vector("clipPath", { id: clip });
+  clipPath.append(vector("circle", { r: 44 }));
+  defs.append(clipPath);
+  group.append(defs);
+  const reticle = vector("g", { class: "kt-reticle" });
+  reticle.append(
+    vector("circle", { r: 62, class: "kt-ring" }),
+    vector("circle", { r: 46, class: "kt-ring dashed" }),
+    vector("path", { d: "M0-74V-50M0 50V74M-74 0H-50M50 0H74M-4-62H4M-4 62H4M-62-4V4M62-4V4", class: "kt-cross" }),
+  );
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + i * Math.PI / 2;
+    const p = (r, off = 0) => `${(Math.cos(a + off) * r).toFixed(1)} ${(Math.sin(a + off) * r).toFixed(1)}`;
+    reticle.append(vector("path", { d: `M${p(54, -0.18)}A54 54 0 0 1 ${p(54, 0.18)}`, class: "kt-bracket" }));
+  }
+  group.append(reticle, vector("circle", { r: 30, class: "kt-lock" }));
+  const scan = vector("g", { class: "kt-scan", "clip-path": `url(#${clip})` });
+  for (let i = 0; i < 3; i++) scan.append(vector("rect", { x: -46, y: -1.2, width: 92, height: 2.4, class: "kt-scanline", style: `animation-delay:${(i * 0.12).toFixed(2)}s` }));
+  group.append(scan);
+  for (let i = 0; i < 3; i++) {
+    const holder = vector("g", { transform: `rotate(${i * 120})` });
+    const chevron = vector("g", { class: "kt-chevron", style: `animation-delay:${(0.8 + i * 0.18).toFixed(2)}s` });
+    chevron.append(vector("path", { d: "M-9-6L0 4 9-6M-6-12L0-5 6-12" }));
+    holder.append(chevron);
+    group.append(holder);
+  }
+  const badge = vector("g", { class: "kt-badge" });
+  badge.append(vector("circle", { r: 14, class: "covert-disc" }), emblemGroup("killTeam", 22));
+  group.append(badge, vector("text", { y: 88, class: "kt-label", "text-anchor": "middle" }, `✠ ${shorten((codename || "KILL TEAM").toUpperCase(), 28)} // LOCKED`));
+  return group;
+}
+
+function playKillTeam(planetId, alliance, codename) {
+  recentKillTeam = { id: planetId, alliance, codename, time: Date.now() };
+  renderMap();
+  if (threeActive) threeView?.infiltrate?.(planetId, alliance);
+  setTimeout(() => {
+    if (recentKillTeam?.id === planetId && Date.now() - recentKillTeam.time >= KILLTEAM_MS) { recentKillTeam = null; if (campaign) renderMap(); }
+  }, KILLTEAM_MS + 50);
 }
 
 function mapBounds() {
@@ -869,6 +989,60 @@ function assaultSection(planet) {
   return section;
 }
 
+function covertSection(planet) {
+  const operations = (campaign.activeKillTeams || []).filter((operation) => operation.target === planet.id || operation.from === planet.id);
+  const live = new Set(activeKillTeams(campaign));
+  const section = element("section", { class: "dossier-section covert-section" }, [
+    element("div", { class: "section-title" }, [element("h2", { text: "COVERT OPERATIONS" }), element("small", { text: `${operations.length} KILL TEAM${operations.length === 1 ? "" : "S"}` })]),
+  ]);
+  if (!operations.length) section.append(element("p", { class: "empty-message", text: "No kill team operations staged from or inserted on this world." }));
+  for (const operation of operations) {
+    const target = planetById(campaign, operation.target);
+    const staging = operation.from ? planetById(campaign, operation.from) : null;
+    const inbound = operation.target === planet.id;
+    const route = inbound
+      ? (staging && staging.id !== planet.id ? `INSERTED FROM ${planetNames(staging).world.toUpperCase()}` : "LOCAL INSERTION")
+      : `INFILTRATING → ${planetNames(target).world.toUpperCase()}`;
+    const card = element("div", { class: `covert-card${live.has(operation) ? "" : " suspended"}`, style: allianceStyle(operation.alliance), "data-operation": operation.id }, [
+      emblemIcon("killTeam", 26, "emblem-icon covert-icon"),
+      element("div", { class: "assault-text" }, [
+        element("strong", { text: operation.codename }),
+        element("span", { text: route }),
+        element("span", { class: "alliance-pill", style: allianceStyle(operation.alliance) }, [emblemIcon(ALLIANCE_EMBLEMS[operation.alliance], 12), document.createTextNode(` ${operation.alliance.toUpperCase()} KILL TEAM`)]),
+        live.has(operation) ? null : element("small", { text: "SIGNAL LOST / TARGET DESTROYED" }),
+      ]),
+    ]);
+    if (warmaster) {
+      card.append(element("button", { type: "button", class: "icon-button", text: "✕", title: "Extract kill team", "aria-label": `Extract ${operation.codename}`,
+        onclick: () => mutate(() => extractKillTeam(campaign, operation.id), `Kill team extracted: ${operation.codename} (${target?.name || operation.target}).`) }));
+    }
+    section.append(card);
+  }
+  if (warmaster) {
+    section.append(element("button", { type: "button", id: "deploy-killteam", class: "primary-button wide killteam-button", text: "[ ⚔ DEPLOY KILL TEAM OPERATION ]",
+      disabled: planet.destroyed, onclick: () => openKillTeamDialog(planet) }));
+  }
+  return section;
+}
+
+function openKillTeamDialog(planet) {
+  if (!warmaster || planet.destroyed) return;
+  killTeamHost = planet.id;
+  const lead = dominantAlliance(planet) || planet.fleets[0]?.alliance || ALLIANCES[0];
+  $("killteam-alliance").value = lead;
+  const worlds = campaign.planets.filter((world) => !world.destroyed && world.id !== planet.id);
+  $("killteam-target").replaceChildren(
+    element("option", { value: planet.id, text: `⊙ CURRENT WORLD: ${planet.name}` }),
+    ...worlds.map((world) => element("option", { value: world.id, text: `→ ${world.name}` })),
+  );
+  $("killteam-codenames").replaceChildren(...KILL_TEAM_CODENAMES.map((name) => element("option", { value: name })));
+  $("killteam-codename").value = "";
+  $("killteam-error").textContent = "";
+  $("killteam-origin").textContent = `STAGING WORLD // ${planet.name.toUpperCase()}`;
+  $("killteam-dialog").showModal();
+  $("killteam-codename").focus();
+}
+
 function renderDossier() {
   const planet = currentPlanet();
   const { world, system } = planetNames(planet);
@@ -908,7 +1082,7 @@ function renderDossier() {
     element("div", { class: "section-title" }, [element("h2", { text: "ALLIANCE POWER LEVELS" }), element("small", { text: `RANGE ${MIN_POWER}–${MAX_POWER}` })]),
     gaugePanel(planet),
   ]));
-  content.append(infrastructureSection(planet), fleetSection(planet), assaultSection(planet));
+  content.append(infrastructureSection(planet), fleetSection(planet), assaultSection(planet), covertSection(planet));
   content.append(element("section", { class: "dossier-section" }, [
     element("div", { class: "section-title" }, [element("h2", { text: "WARP LANES" }), element("small", { text: `${neighbors(campaign, planet.id).length} LINKS` })]),
     element("div", { class: "lane-links" }, neighbors(campaign, planet.id).map((id) => {
@@ -929,7 +1103,7 @@ function renderDossier() {
         mutate(() => setDestroyed(campaign, planet.id, destroying), destroying ? `EXTERMINATUS ENACTED: ${planet.name} has been destroyed.` : `${planet.name} restored to the theatre.`);
         if (destroying) setTimeout(() => { if (campaign) renderMap(); }, 2100);
       } }),
-      element("p", { class: "warning", text: "Destroyed worlds block fleet movement and edits; records are retained. Export state to persist changes." }),
+      element("p", { class: "warning", text: "Destroyed worlds block fleet movement and edits; records are retained. Edits auto-save to this browser; export state to publish them." }),
     ]));
   }
   $("dossier").replaceChildren(element("div", { class: "panel-heading" }, [element("h2", { text: "PLANETARY DOSSIER" }), element("span", { text: "◉ LINKED" })]), content);
@@ -1137,7 +1311,7 @@ $("override").addEventListener("click", () => {
     warmaster = false;
     clearGesture();
     render();
-    report(dirty ? "Command access locked. Unexported changes are retained in this tab; unlock to export." : "Command access locked.");
+    report(dirty ? "Command access locked. Live changes remain auto-saved in this browser; unlock to export." : "Command access locked.");
   } else {
     $("passkey").value = "";
     $("passkey-error").textContent = "";
@@ -1153,7 +1327,29 @@ $("passkey-form").addEventListener("submit", (event) => {
   $("passkey").value = "";
   $("passkey-dialog").close();
   render();
-  report("Warmaster authorized. Edits are local until you EXPORT COGITATOR STATE.");
+  report("Warmaster authorized. Every edit auto-saves to this browser; EXPORT COGITATOR STATE to publish campaign_data.json.");
+});
+
+$("cancel-killteam").addEventListener("click", () => $("killteam-dialog").close());
+$("killteam-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const host = planetById(campaign, killTeamHost);
+  if (!warmaster || !host) { $("killteam-dialog").close(); return; }
+  const alliance = $("killteam-alliance").value;
+  const targetId = $("killteam-target").value;
+  const codename = $("killteam-codename").value.trim();
+  if (!codename) { $("killteam-error").textContent = "An operation codename is required."; return; }
+  try {
+    deployKillTeam(structuredClone(campaign), host.id, targetId, alliance, codename);
+  } catch (error) {
+    $("killteam-error").textContent = error.message;
+    return;
+  }
+  $("killteam-dialog").close();
+  const target = planetById(campaign, targetId);
+  if (mutate(() => deployKillTeam(campaign, host.id, targetId, alliance, codename), `${alliance} kill team deployed: "${codename}" inserted on ${target.name}.`)) {
+    playKillTeam(targetId, alliance, codename);
+  }
 });
 
 $("export").addEventListener("click", () => {
@@ -1166,6 +1362,7 @@ $("export").addEventListener("click", () => {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
     dirty = false;
+    persistState();
     render();
     $("unsaved").textContent = "Exported. Replace MapWebPage/campaign_data.json with the download and commit it to publish.";
     report("campaign_data.json exported. Commit it so the site and Discord bot pick up the new state.");
@@ -1182,16 +1379,17 @@ $("import-file").addEventListener("change", async (event) => {
     if (file.size > 5 * 1024 * 1024) throw new Error("Campaign files must be smaller than 5 MB.");
     const incoming = JSON.parse(await file.text());
     const synced = normalizeCampaign(incoming);
-    if (dirty && !(await confirmAction("Replace campaign", "Discard unexported local changes and load the imported campaign?", "REPLACE"))) return;
+    if (dirty && !(await confirmAction("Replace campaign", "Discard the live (auto-saved, unexported) campaign state and load the imported campaign?", "REPLACE"))) return;
     campaign = incoming;
     selectedId = campaign.planets[0].id;
-    dirty = false;
+    dirty = true;
+    const saved = persistState();
     clearGesture();
     renderLegend();
     render();
     fitMap();
     threeView?.fit();
-    report(`Loaded ${file.name} (${campaign.planets.length} systems). Import is local only.${synced ? ` Official terrain twists applied to ${synced} world${synced === 1 ? "" : "s"}.` : ""}`);
+    if (saved) report(`Loaded ${file.name} (${campaign.planets.length} systems). Import is auto-saved to this browser; export to publish.${synced ? ` Official terrain twists applied to ${synced} world${synced === 1 ? "" : "s"}.` : ""}`);
   } catch (error) {
     report(`Import rejected: ${error.message}`, true);
   } finally {
@@ -1200,10 +1398,12 @@ $("import-file").addEventListener("change", async (event) => {
 });
 
 window.addEventListener("beforeunload", (event) => {
-  if (dirty) { event.preventDefault(); event.returnValue = ""; }
+  // Auto-saved state survives a reload; only warn when localStorage is unavailable.
+  if (dirty && !storageHealthy) { event.preventDefault(); event.returnValue = ""; }
 });
 
 let lastSynced = 0;
+let feedFingerprint = null;
 
 async function fetchCampaign() {
   // no-store skips the HTTP cache; the query string also defeats CDN/proxy caches (e.g. GitHub Pages).
@@ -1211,6 +1411,7 @@ async function fetchCampaign() {
   if (!response.ok) throw new Error(`Campaign feed returned HTTP ${response.status}.`);
   const data = await response.json();
   lastSynced = normalizeCampaign(data);
+  feedFingerprint = campaignFingerprint(serializeCampaign(data));
   return data;
 }
 
@@ -1245,34 +1446,88 @@ function applyIndexCollapse(announce = false) {
 $("index-toggle").addEventListener("click", () => { indexCollapsed = !indexCollapsed; applyIndexCollapse(true); });
 applyIndexCollapse();
 
+// Drops the auto-saved state and reloads the canonical campaign_data.json from the server.
+async function restoreCanonical() {
+  const incoming = await fetchCampaign();
+  clearStoredState();
+  campaign = incoming;
+  baseline = feedFingerprint;
+  storageHealthy = true;
+  if (!planetById(campaign, selectedId)) selectedId = campaign.planets[0].id;
+  dirty = false;
+  recentConstruction = null;
+  recentKillTeam = null;
+  recentExterminatus = null;
+  clearGesture();
+  renderLegend();
+  render();
+  fitMap();
+  threeView?.fit();
+}
+
+const hasStoredState = () => { try { return localStorage.getItem(STORAGE_KEY) !== null; } catch { return false; } };
+
 $("reload-feed").addEventListener("click", async () => {
   if (!campaign) return;
-  if (dirty && !(await confirmAction("Re-sync campaign feed", "Discard unexported local changes and reload campaign_data.json from the server?", "RE-SYNC"))) return;
+  if ((dirty || hasStoredState()) && !(await confirmAction("Re-sync campaign feed", "Discard the live auto-saved campaign state in this browser and reload campaign_data.json from the server?", "RE-SYNC"))) return;
   try {
-    const incoming = await fetchCampaign();
-    campaign = incoming;
-    if (!planetById(campaign, selectedId)) selectedId = campaign.planets[0].id;
-    dirty = false;
-    clearGesture();
-    renderLegend();
-    render();
-    fitMap();
-    threeView?.fit();
+    await restoreCanonical();
     report(`Feed re-synced: ${campaign.planets.length} systems, ${campaign.warpLanes.length} warp lanes, ${activeVectors(campaign).length} assaults.${twistNote()}`);
   } catch (error) {
     report(`Re-sync failed: ${error.message}`, true);
   }
 });
 
-async function initialize() {
+$("reset-state").addEventListener("click", async () => {
+  if (!campaign || !warmaster) return;
+  const ok = await confirmAction("Reset to original canonical state",
+    `Wipe the auto-saved campaign (${STORAGE_KEY}) from this browser and revert to campaign_data.json? All unexported power levels, infrastructure, fleet moves, assaults and kill team operations will be lost. Export first if you need them.`,
+    "↺ RESET");
+  if (!ok) return;
   try {
-    campaign = await fetchCampaign();
+    await restoreCanonical();
+    report(`Canonical state restored from campaign_data.json. Local auto-save wiped: ${campaign.planets.length} systems, ${activeVectors(campaign).length} assaults, ${activeKillTeams(campaign).length} kill team operations.`);
+  } catch (error) {
+    report(`Reset failed: ${error.message}. The local auto-save was kept.`, true);
+  }
+});
+
+async function initialize() {
+  const stored = readStoredState();
+  let feed = null;
+  let feedError = null;
+  try { feed = await fetchCampaign(); } catch (error) { feedError = error; }
+  try {
+    // A live (unexported) local state always wins; an exported one only while campaign_data.json is unchanged.
+    const useStored = stored && (stored.dirty || !feed || stored.baseline === feedFingerprint);
+    if (useStored) {
+      campaign = stored.campaign;
+      dirty = stored.dirty;
+      baseline = stored.baseline || feedFingerprint;
+      if (feed && campaignFingerprint(serializeCampaign(campaign)) === feedFingerprint) { dirty = false; baseline = feedFingerprint; }
+      persistState();
+    } else if (feed) {
+      if (stored) clearStoredState();
+      campaign = feed;
+      baseline = feedFingerprint;
+      dirty = false;
+    } else {
+      throw feedError;
+    }
     selectedId = campaign.planets[0].id;
     renderLegend();
     render();
     fitMap();
     $("loading").hidden = true;
-    report(`Noospheric link established: ${campaign.planets.length} systems, ${campaign.warpLanes.length} warp lanes, ${activeVectors(campaign).length} assaults. Player observation mode.${twistNote()}`);
+    const counts = `${campaign.planets.length} systems, ${campaign.warpLanes.length} warp lanes, ${activeVectors(campaign).length} assaults, ${activeKillTeams(campaign).length} kill team ops`;
+    if (useStored) {
+      const when = stored.savedAt ? new Date(stored.savedAt).toLocaleString() : "an earlier session";
+      const drift = !feed ? " Campaign feed unreachable; running from local memory."
+        : stored.baseline && stored.baseline !== feedFingerprint && dirty ? " NOTICE: campaign_data.json has changed since this state was saved — use RESET TO ORIGINAL CANONICAL STATE to adopt it." : "";
+      report(`Live campaign restored from local auto-save (${when}): ${counts}.${drift}`, Boolean(drift));
+    } else {
+      report(`Noospheric link established: ${counts}. Player observation mode.${twistNote()}`);
+    }
   } catch (error) {
     $("loading").textContent = `FEED FAILURE: ${error.message} Serve this folder over HTTP, check campaign_data.json, and reload.`;
     $("override").disabled = true;

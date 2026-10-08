@@ -76,6 +76,13 @@ export const EMBLEMS = {
     { d: "M-5.4-1.6H5.4M0-11V6", mode: "stroke" },
     { d: "M-4.6-5H-1.2V-2.8H-4.6ZM1.2-5H4.6V-2.8H1.2Z", mode: "fill" },
   ] },
+  // Covert kill team mark: a skull over a crossed combat dagger.
+  killTeam: { label: "Kill Team Operation", layers: [
+    { d: "M-9 9L9-9M9 9L-9-9", mode: "stroke" },
+    { d: "M-6.5-1.5C-6.5-7-3.4-9.5 0-9.5S6.5-7 6.5-1.5C6.5 1.4 5 3 3.4 3.6V6.4H-3.4V3.6C-5 3-6.5 1.4-6.5-1.5Z", mode: "fill" },
+    { d: "M-4.1-3.2A1.8 1.8 0 1 0-0.5-3.2A1.8 1.8 0 1 0-4.1-3.2ZM0.5-3.2A1.8 1.8 0 1 0 4.1-3.2A1.8 1.8 0 1 0 0.5-3.2ZM-0.9 0.4L0-1.2 0.9 0.4Z", mode: "fill", invert: true },
+    { d: "M-1.6 4.2V6.4M1.6 4.2V6.4", mode: "stroke", invert: true },
+  ] },
 };
 
 const radial = (count, build, rotation = -Math.PI / 2) => {

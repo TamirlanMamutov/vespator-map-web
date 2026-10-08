@@ -28,6 +28,10 @@ A static, dependency-free tactical campaign terminal for the *War on the Vespato
     - In 2D, a looping arrow curves around the orbit reticle, then dives toward the core with a pulsing impact marker.
     - In 3D, a particle conduit spirals down from high orbit to the surface.
   - Vectors that touch an Exterminated world are suspended and not drawn.
+- **Kill Team operations** (`activeKillTeams`): covert ops shown as ✠ skull-and-dagger markers in the alliance colour on the map, in the dossier's **COVERT OPERATIONS** section, and as tethered emblems in 3D. Deploying one plays:
+  - in 2D, a sniper-reticle lock-on around the target, phosphor scanlines sweeping the reticle, and three stealth chevrons contracting to the core that leave the covert badge;
+  - in 3D, a stealth dart streaking down a steep descent cone into the planet, then an expanding electromagnetic shockwave ring with glitching scanline particles at the impact site.
+- **Auto-persistence.** Every Warmaster edit saves to browser `localStorage`, so refreshing or restarting the browser keeps the live campaign (see [Persistence](#persistence-auto-save-reset-export)).
 - **Per-alliance Power Levels (1–4).** Each world has a separate rating for Imperium (`#E5A93C`), Xenos (`#33FF33`), and Chaos (`#FF3333`). They appear as segmented vertical gauge cards on the map, in the theatre index, and in the dossier.
 - **Planetary Dossier** showing:
   - designation, world and system name
@@ -79,17 +83,29 @@ Press **◇ WARMASTER OVERRIDE** and enter the passkey from [`config.js`](config
 | Construct | **▲ CONSTRUCT INFRASTRUCTURE**: choose a type and an alliance. It builds in the first empty slot, opening a new slot if needed (max 6). Raising capacity with **+** also plays the effect. In 2D, the effect is expanding alliance-coloured hexagonal wireframes over a holographic blueprint scan. In 3D, it is the scaffold sphere. |
 | Exterminatus | **☢ INITIATE EXTERMINATUS** turns the world into a red shattered hazard wireframe, blocks its lanes, and plays the destruction sequence in 3D. **↺ RESTORE WORLD** reverses it. |
 | Launch Assault | In the dossier's **OFFENSIVE VECTORS** section, pick the attacking alliance and a target: either a world connected by a direct lane, or **⊙ ORBITAL STRIKE** against the host world itself. Add an optional designation, then press **⚔ LAUNCH ASSAULT**. The source must be intact, the target not destroyed, and the same from/to/alliance cannot be launched twice. Press **✕** on a vector card to recall it. |
-| Persist | **⇩ EXPORT COGITATOR STATE** downloads an updated `campaign_data.json` with the lanes, offensive vectors (including orbital strikes), infrastructure and terrain twists. |
+| Kill Team | **[ ⚔ DEPLOY KILL TEAM OPERATION ]** in the dossier's **COVERT OPERATIONS** section opens a panel: pick the operation alliance (Imperium / Xenos / Chaos), the infiltration target (any intact world; the current world is listed first), and a codename (suggestions include "Operative Extraction", "Vox-Array Sabotage", "Crypt Infiltration"). Codenames are 1–80 characters and must be unique per target world. Press **✕** on an operation card to extract the team. |
+| Persist | **⇩ EXPORT COGITATOR STATE** downloads an updated `campaign_data.json` with the lanes, offensive vectors (including orbital strikes), kill team operations, infrastructure and terrain twists. |
+| Reset | **[ ↺ RESET TO ORIGINAL CANONICAL STATE ]** asks for confirmation, then wipes the local auto-save and reloads `campaign_data.json`. |
 
 > The passkey is only a UI lock: anyone can read the static files. Real authority is whoever can commit to the repository.
 
-All edits stay in browser memory until exported. To save them:
+## Persistence (auto-save, reset, export)
 
-1. Export the file.
-2. Replace `MapWebPage/campaign_data.json` with it.
+Every Warmaster change (power levels, infrastructure, construction, fleets, assaults, kill teams, Exterminatus, imported files) is written immediately to `localStorage` under the key **`vespator_cogitator_active_state`**. The saved envelope is `{ version, savedAt, dirty, baseline, campaign }`, where `baseline` is a fingerprint of the `campaign_data.json` it was based on.
+
+On page load:
+
+1. If the browser has a saved state, it is loaded instead of the defaults. The status line reports "restored from local auto-save" and the save time.
+2. If nothing is saved, `campaign_data.json` is the baseline.
+3. If a saved state has been **exported** (nothing unexported) and the server's `campaign_data.json` has since changed, the newer feed wins and the old auto-save is discarded. Unexported edits are never discarded automatically; instead a notice says the feed has drifted.
+
+Auto-save is per browser and per device. To publish changes for everyone:
+
+1. **⇩ EXPORT COGITATOR STATE**.
+2. Replace `MapWebPage/campaign_data.json` with the downloaded file.
 3. Commit and push. The site redeploys, and the Discord bot reads the new state.
 
-**↑ LOAD JSON** loads a file locally for previewing. **↻ RE-SYNC FEED** re-reads `campaign_data.json` from the server, asking first if there are unexported edits. Every fetch uses `cache: "no-store"` plus a timestamp query string, so neither the browser nor the GitHub Pages CDN serves a stale copy.
+**↺ RESET TO ORIGINAL CANONICAL STATE** (Warmaster only) and **↻ RE-SYNC FEED** both clear the auto-save and reload `campaign_data.json` after a confirmation. **↑ LOAD JSON** loads a file for previewing and auto-saves it. Every fetch uses `cache: "no-store"` plus a timestamp query string, so neither the browser nor the GitHub Pages CDN serves a stale copy. If `localStorage` is unavailable (private mode, quota), the status line says so and the page warns before closing with unexported edits.
 
 ## Data schema
 
@@ -118,6 +134,10 @@ All edits stay in browser memory until exported. To save them:
   "offensiveVectors": [
     { "from": "gj_3378b", "to": "harvest", "alliance": "Imperium", "label": "Crusade Spearhead" },  // label optional, 1–80 chars
     { "from": "pluto_ii", "to": "pluto_ii", "alliance": "Chaos", "label": "Orbital Bombardment" }  // from == to: orbital strike
+  ],
+  "activeKillTeams": [
+    // id unique; target any world; codename 1–80 chars, unique per target; "from" (optional) = dossier it was launched from
+    { "id": "kt-a1b2c3", "alliance": "Xenos", "target": "sidon", "codename": "Crypt Infiltration", "from": "knossos" }
   ]
 }
 ```
@@ -191,6 +211,8 @@ The neighbouring `DiscordBot/` folder is a separate project; nothing here modifi
 - **Read (same machine):** open `../MapWebPage/campaign_data.json` directly, read-only, and reload it when the file changes.
 - **Write:** have the bot (or a Warmaster) commit an updated `campaign_data.json`, either with `git commit` + `git push` or the contents API `PUT` with the file's current `sha`. The Pages workflow redeploys automatically. Keep to the schema above. Slots are `"empty"`, `"active"`, or `{ type, alliance?, destroyed? }`. Strongholds are named `<Imperial|Xenos|Chaos> Stronghold`, and other typed slots are `Fortification Line`, `Support Facility`, or `Staging Grounds`. When reading over HTTP, add a cache-busting query (`?t=<timestamp>`) so the bot always sees the latest deploy.
 - **Offensive vectors:** read `offensiveVectors` to announce active assaults, for example "⚔ Chaos — Warp Incursion: Pluto II → Nickel". A vector whose `from` equals its `to` is an orbital strike on that world, for example "⊙ Chaos — Orbital Bombardment: Pluto II". Ignore any vector whose source or target has `destroyed: true`; `activeVectors` does this. A bot can add an assault with `launchAssault(data, from, to, alliance, label)` or remove one with `recallAssault(data, index)`, then commit the file.
+- **Kill teams:** read `activeKillTeams` to announce covert ops, for example "✠ Xenos — Crypt Infiltration: Sidon". Operations on a destroyed world are dormant; `activeKillTeams(data)` filters them out. A bot can add one with `deployKillTeam(data, from, target, alliance, codename)` or remove one with `extractKillTeam(data, id)`. The array is optional: a file without it loads as `[]`.
+- Live edits in a Warmaster's browser exist only in that browser's `localStorage` until exported and committed, so the bot only sees the committed file.
 - Useful helpers for a JavaScript bot: `normalizeCampaign`, `validateCampaign`, `activeVectors`, `constructInfrastructure`, `moveFleet`, `setPowerLevel`, `setSlot`, `slotInfo`, `fleetTitle`, and `serializeCampaign` from [`campaign.js`](campaign.js) are pure ES modules with no DOM dependencies.
 
 ## Files

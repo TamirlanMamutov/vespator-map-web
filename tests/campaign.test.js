@@ -7,6 +7,8 @@ import {
   commissionFleet, decommissionFleet, canTransfer, moveFleet, setDestroyed, serializeCampaign, planetById,
   normalizeCampaign, TERRAIN_TWISTS, TWIST_NAMES, MAX_TWISTS, twistKey, constructInfrastructure,
   activeVectors, assaultTargets, launchAssault, recallAssault, assaultTitle, isOrbitalStrike,
+  deployKillTeam, extractKillTeam, activeKillTeams, killTeamTitle, KILL_TEAM_CODENAMES,
+  STORAGE_KEY, campaignFingerprint, packState, unpackState,
 } from "../campaign.js";
 import {
   EMBLEMS, TERRAIN_GLYPHS, BADGE_EMBLEMS, ALLIANCE_EMBLEMS, INFRASTRUCTURE_EMBLEMS, FACTION_EMBLEMS,
@@ -358,4 +360,95 @@ test("every alliance and faction has an emblem", () => {
     assert.ok(EMBLEMS[ALLIANCE_EMBLEMS[alliance]], alliance);
     for (const faction of data.alliances[alliance].factions) assert.ok(FACTION_EMBLEMS[faction] && EMBLEMS[factionEmblem(faction, alliance)], faction);
   }
+});
+
+test("kill teams deploy to any surviving world, persist in activeKillTeams and can be extracted", () => {
+  const data = fresh();
+  normalizeCampaign(data);
+  assert.deepEqual(data.activeKillTeams, []);
+  const far = data.planets.find((planet) => planet.id !== "sidon" && !neighbors(data, "sidon").includes(planet.id));
+  const operation = deployKillTeam(data, "sidon", far.id, "Chaos", "  Vox-Array Sabotage ");
+  assert.match(operation.id, /^kt-[a-z0-9]{1,6}$/);
+  assert.deepEqual({ ...operation, id: undefined }, { id: undefined, alliance: "Chaos", target: far.id, codename: "Vox-Array Sabotage", from: "sidon" });
+  const local = deployKillTeam(data, "sidon", "sidon", "Imperium", KILL_TEAM_CODENAMES[0]);
+  assert.equal(local.target, "sidon");
+  assert.doesNotThrow(() => validateCampaign(data));
+  assert.equal(activeKillTeams(data).length, 2);
+  assert.equal(killTeamTitle(data, operation), `Chaos Kill Team: Vox-Array Sabotage @ ${far.name}`);
+  assert.throws(() => deployKillTeam(data, "sidon", far.id, "Xenos", "vox-array sabotage"), /already active/);
+  assert.throws(() => deployKillTeam(data, "sidon", far.id, "Xenos", "   "), /codename/);
+  assert.throws(() => deployKillTeam(data, "sidon", far.id, "Orks", "Waaagh"), /Unknown alliance/);
+  assert.throws(() => deployKillTeam(data, "sidon", "nowhere", "Xenos", "Ghost"), /no longer exists/);
+  setDestroyed(data, far.id, true);
+  assert.throws(() => deployKillTeam(data, "sidon", far.id, "Xenos", "Crypt Infiltration"), /destroyed world/);
+  assert.deepEqual(activeKillTeams(data).map((entry) => entry.id), [local.id]);
+  extractKillTeam(data, operation.id);
+  assert.equal(data.activeKillTeams.length, 1);
+  assert.throws(() => extractKillTeam(data, operation.id), /no longer exists/);
+  const exported = JSON.parse(serializeCampaign(data));
+  assert.deepEqual(exported.activeKillTeams, [local]);
+});
+
+test("activeKillTeams validation rejects malformed operations", () => {
+  const base = () => {
+    const data = fresh();
+    data.activeKillTeams = [{ id: "kt-alpha", alliance: "Xenos", target: "sidon", codename: "Crypt Infiltration" }];
+    return data;
+  };
+  assert.doesNotThrow(() => validateCampaign(base()));
+  const cases = [
+    (data) => { data.activeKillTeams = {}; },
+    (data) => { data.activeKillTeams[0].target = "nowhere"; },
+    (data) => { data.activeKillTeams[0].from = "nowhere"; },
+    (data) => { data.activeKillTeams[0].alliance = "Orks"; },
+    (data) => { data.activeKillTeams[0].codename = ""; },
+    (data) => { data.activeKillTeams[0].id = "bad id!"; },
+    (data) => { data.activeKillTeams.push({ ...data.activeKillTeams[0] }); },
+    (data) => { data.activeKillTeams.push({ ...data.activeKillTeams[0], id: "kt-beta", codename: "CRYPT INFILTRATION" }); },
+  ];
+  for (const corrupt of cases) {
+    const data = base();
+    corrupt(data);
+    assert.throws(() => validateCampaign(data), /Invalid campaign/);
+  }
+});
+
+test("local auto-save envelope round-trips the live state under the canonical storage key", () => {
+  assert.equal(STORAGE_KEY, "vespator_cogitator_active_state");
+  const canonical = fresh();
+  normalizeCampaign(canonical);
+  const baseline = campaignFingerprint(serializeCampaign(canonical));
+  assert.match(baseline, /^[0-9a-f]{8}$/);
+  const again = fresh();
+  normalizeCampaign(again);
+  assert.equal(campaignFingerprint(serializeCampaign(again)), baseline);
+  const live = structuredClone(canonical);
+  setPowerLevel(live, "sidon", "Chaos", 4);
+  constructInfrastructure(live, "sidon", INFRASTRUCTURE_TYPES[0], "Chaos");
+  deployKillTeam(live, "sidon", "sidon", "Xenos", "Crypt Infiltration");
+  assert.notEqual(campaignFingerprint(serializeCampaign(live)), baseline);
+  const packed = packState(live, { baseline, dirty: true, savedAt: "2025-01-01T00:00:00.000Z" });
+  const restored = unpackState(packed);
+  assert.deepEqual(restored.campaign, live);
+  assert.equal(restored.baseline, baseline);
+  assert.equal(restored.dirty, true);
+  assert.equal(restored.savedAt, "2025-01-01T00:00:00.000Z");
+  assert.equal(planetById(restored.campaign, "sidon").powerLevels.Chaos, 4);
+  assert.equal(restored.campaign.activeKillTeams[0].codename, "Crypt Infiltration");
+  // A bare campaign object (e.g. hand-written) is accepted and treated as unexported.
+  const bare = unpackState(JSON.stringify(live));
+  assert.deepEqual(bare.campaign, live);
+  assert.equal(bare.dirty, true);
+  assert.equal(bare.baseline, null);
+  assert.throws(() => unpackState("{not json"), SyntaxError);
+  assert.throws(() => unpackState(JSON.stringify({ version: 99, campaign: live })), /newer cogitator/);
+  const broken = structuredClone(live);
+  broken.planets[0].powerLevels.Chaos = 9;
+  assert.throws(() => unpackState(JSON.stringify({ version: 1, campaign: broken })), /Invalid campaign/);
+  assert.throws(() => packState(broken), /Invalid campaign/);
+});
+
+test("kill team emblem is available for 2D badges and 3D sprites", () => {
+  assert.ok(EMBLEMS.killTeam);
+  assert.ok(emblemLayers("killTeam").length >= 2);
 });

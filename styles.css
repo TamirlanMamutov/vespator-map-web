@@ -237,6 +237,27 @@ h1, h2, h3 { margin: 0; font-weight: normal; letter-spacing: .12em; }
 @keyframes construct-hex { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(4.2); opacity: 0; } }
 @keyframes blueprint-scan { from { transform: translateY(-48px); } to { transform: translateY(48px); } }
 @keyframes construct-fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
+.killteam-effect { pointer-events: none; }
+.killteam-effect .kt-reticle { transform-box: fill-box; transform-origin: center; filter: url(#glow); animation: kt-lock-on .9s cubic-bezier(.2, .8, .2, 1) forwards, kt-fade 3.2s linear forwards; }
+.killteam-effect .kt-ring { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.killteam-effect .kt-ring.dashed { stroke-dasharray: 3 5; stroke-width: 1.2; opacity: .8; }
+.killteam-effect .kt-cross, .killteam-effect .kt-bracket { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: square; }
+.killteam-effect .kt-lock { fill: none; stroke: currentColor; stroke-width: 2.4; opacity: 0; animation: kt-blink .18s steps(2) .9s 6, kt-fade 3.2s linear forwards; }
+.killteam-effect .kt-scanline { fill: #33ff33; opacity: 0; filter: url(#glow); animation: kt-sweep .42s linear 6; }
+.killteam-effect .kt-chevron { color: inherit; opacity: 0; transform: translateY(-78px); animation: kt-contract .75s ease-in 2; }
+.killteam-effect .kt-chevron path { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linejoin: miter; filter: url(#glow); }
+.killteam-effect .kt-badge { opacity: 0; transform-box: fill-box; transform-origin: center; --emblem-bg: #030803; animation: kt-badge .5s ease-out 2.25s forwards, kt-fade 3.2s linear forwards; }
+.killteam-effect .kt-label { fill: currentColor; font-size: 11px; letter-spacing: .2em; animation: kt-fade 3.2s steps(8) forwards; }
+@keyframes kt-lock-on { 0% { transform: scale(2.4) rotate(-90deg); opacity: 0; } 60% { opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+@keyframes kt-blink { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes kt-sweep { 0% { transform: translateY(-46px); opacity: .9; } 100% { transform: translateY(46px); opacity: .2; } }
+@keyframes kt-contract { 0% { transform: translateY(-78px); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateY(-16px); opacity: 0; } }
+@keyframes kt-badge { 0% { opacity: 0; transform: scale(2.2); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes kt-fade { 0%, 82% { visibility: visible; } 100% { visibility: hidden; } }
+.covert-marker { cursor: pointer; --emblem-bg: #030803; filter: drop-shadow(0 0 4px currentColor); }
+.covert-disc { fill: #030803; stroke: currentColor; stroke-width: 1.6; }
+.covert-marker .covert-disc { stroke-dasharray: 4 2; }
+.covert-marker:hover .covert-disc { fill: #0a1f0c; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .system-tag { cursor: pointer; }
@@ -341,6 +362,16 @@ button.segment:hover { outline: 1px solid #fff; opacity: 1; }
 .construct-form label { grid-column: 1 / -1; font-size: 10px; letter-spacing: .2em; color: var(--green); }
 .construct-form select { background: #031005; border: 1px solid var(--green-dim); padding: 4px; color: var(--green); min-width: 0; }
 .construct-button { grid-column: 1 / -1; }
+.covert-card { --alliance: var(--green); --emblem-bg: #031005; display: grid; grid-template-columns: 30px 1fr auto; gap: 8px; align-items: center; border: 1px dashed var(--alliance); border-left: 3px solid var(--alliance); padding: 7px 8px; margin-bottom: 6px; color: var(--alliance); background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .025) 0 2px, transparent 2px 4px); }
+.covert-card.suspended { opacity: .5; }
+.covert-icon { filter: drop-shadow(0 0 4px currentColor); }
+.killteam-button { margin-top: 6px; border-color: var(--red); color: var(--red); letter-spacing: .1em; }
+.killteam-button:hover:not(:disabled) { background: rgba(255, 51, 51, .12); }
+.reset-button { font-size: 11px; padding: 6px 10px; }
+dialog select { background: #000; border: 1px solid var(--green); padding: 8px; color: var(--green); }
+.killteam-dialog form { display: grid; gap: 10px; }
+.killteam-dialog h2, .killteam-dialog .eyebrow { color: var(--red); }
+#killteam-error { color: var(--red); min-height: 1em; margin: 0; }
 .lane-links { display: flex; flex-wrap: wrap; gap: 6px; }
 .lane-chip { background: transparent; border: 1px solid var(--green-dim); color: var(--green); padding: 3px 8px; font-size: 12px; }
 .lane-chip:hover { background: var(--green-faint); }

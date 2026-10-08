@@ -110,6 +110,22 @@ export function validateCampaign(data) {
       seen.add(id);
     }
   }
+  if (data.activeKillTeams !== undefined) {
+    if (!Array.isArray(data.activeKillTeams)) fail("activeKillTeams must be an array.");
+    const seen = new Set();
+    const operations = new Set();
+    for (const operation of data.activeKillTeams) {
+      if (!record(operation) || !key(operation.id) || seen.has(operation.id)) fail("kill team operations need a unique id key.");
+      seen.add(operation.id);
+      if (!ids.has(operation.target)) fail(`kill team operation ${operation.id} must target an existing world.`);
+      if (operation.from !== undefined && !ids.has(operation.from)) fail(`kill team operation ${operation.id} must stage from an existing world.`);
+      if (!ALLIANCES.includes(operation.alliance)) fail(`kill team operation ${operation.id} needs an alliance of ${ALLIANCES.join(", ")}.`);
+      if (!text(operation.codename, 80)) fail(`kill team operation ${operation.id} needs a 1–80 character codename.`);
+      const signature = `${operation.target}>${operation.codename.trim().toLowerCase()}`;
+      if (operations.has(signature)) fail(`duplicate kill team operation "${operation.codename}" on ${operation.target}.`);
+      operations.add(signature);
+    }
+  }
   return data;
 }
 
@@ -132,6 +148,7 @@ export function normalizeCampaign(data) {
   }
   validateCampaign(data);
   data.offensiveVectors ??= [];
+  data.activeKillTeams ??= [];
   return changed;
 }
 
@@ -316,6 +333,82 @@ export function recallAssault(data, index) {
 export function assaultTitle(data, assault) {
   const target = planetById(data, assault.to)?.name || assault.to;
   return assault.label || (isOrbitalStrike(assault) ? `${assault.alliance} Orbital Strike on ${target}` : `${assault.alliance} Assault on ${target}`);
+}
+
+export const KILL_TEAM_CODENAMES = ["Operative Extraction", "Vox-Array Sabotage", "Crypt Infiltration"];
+
+// Covert operations ignore warp-lane limits: kill teams can be inserted on any surviving world.
+export function deployKillTeam(data, fromId, targetId, alliance, codename) {
+  const target = planetById(data, targetId);
+  if (!target) throw new Error("Infiltration target no longer exists.");
+  if (target.destroyed) throw new Error(`${target.name} is a destroyed world; there is nothing left to infiltrate.`);
+  if (fromId !== undefined && !planetById(data, fromId)) throw new Error("Staging world no longer exists.");
+  if (!ALLIANCES.includes(alliance)) throw new Error("Unknown alliance.");
+  const name = typeof codename === "string" ? codename.trim() : "";
+  if (!text(name, 80)) throw new Error("Operation codename must be 1–80 characters.");
+  data.activeKillTeams ??= [];
+  if (data.activeKillTeams.some((operation) => operation.target === targetId && operation.codename.trim().toLowerCase() === name.toLowerCase())) {
+    throw new Error(`Operation "${name}" is already active on ${target.name}.`);
+  }
+  let id;
+  do id = `kt-${Math.random().toString(36).slice(2, 8)}`; while (data.activeKillTeams.some((operation) => operation.id === id));
+  const operation = { id, alliance, target: targetId, codename: name };
+  if (fromId !== undefined) operation.from = fromId;
+  data.activeKillTeams.push(operation);
+  return operation;
+}
+
+export function extractKillTeam(data, id) {
+  const index = (data.activeKillTeams || []).findIndex((operation) => operation.id === id);
+  if (index < 0) throw new Error("Kill team operation no longer exists.");
+  return data.activeKillTeams.splice(index, 1)[0];
+}
+
+// Operations on a world that later suffers Exterminatus stay on record but are not shown as live markers.
+export function activeKillTeams(data) {
+  return (data.activeKillTeams || []).filter((operation) => {
+    const target = planetById(data, operation.target);
+    return target && !target.destroyed;
+  });
+}
+
+export function killTeamTitle(data, operation) {
+  return `${operation.alliance} Kill Team: ${operation.codename} @ ${planetById(data, operation.target)?.name || operation.target}`;
+}
+
+// localStorage auto-save envelope for the live Warmaster state.
+export const STORAGE_KEY = "vespator_cogitator_active_state";
+export const STORAGE_VERSION = 1;
+
+export function campaignFingerprint(data) {
+  const source = typeof data === "string" ? data : JSON.stringify(data);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index++) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function packState(data, { baseline = null, dirty = true, savedAt = new Date().toISOString() } = {}) {
+  validateCampaign(data);
+  return JSON.stringify({ version: STORAGE_VERSION, savedAt, baseline, dirty: Boolean(dirty), campaign: data });
+}
+
+// Accepts the envelope (or a bare campaign object) and returns a validated campaign, or throws.
+export function unpackState(raw) {
+  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  if (!record(parsed)) throw new Error("Stored state is not an object.");
+  const envelope = record(parsed.campaign) ? parsed : { campaign: parsed };
+  if (envelope.version !== undefined && envelope.version > STORAGE_VERSION) throw new Error("Stored state was written by a newer cogitator.");
+  const data = structuredClone(envelope.campaign);
+  normalizeCampaign(data);
+  return {
+    campaign: data,
+    baseline: typeof envelope.baseline === "string" ? envelope.baseline : null,
+    dirty: envelope.dirty !== false,
+    savedAt: typeof envelope.savedAt === "string" ? envelope.savedAt : null,
+  };
 }
 
 export function serializeCampaign(data) {

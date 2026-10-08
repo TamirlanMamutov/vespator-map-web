@@ -26,6 +26,7 @@
     <div class="hud-actions">
       <span id="mode-badge" class="mode-badge">READ-ONLY ACCESS</span>
       <button id="export" class="export-button" type="button" hidden>⇩ EXPORT COGITATOR STATE</button>
+      <button id="reset-state" class="danger-button reset-button" type="button" hidden title="Wipe the auto-saved local state and reload campaign_data.json">[ ↺ RESET TO ORIGINAL CANONICAL STATE ]</button>
       <button id="override" class="outline-button" type="button">◇ WARMASTER OVERRIDE</button>
     </div>
   </header>
@@ -55,7 +56,7 @@
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           </defs>
           <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#major-grid)"/>
-          <g id="map-title"></g><g id="lanes"></g><g id="vectors"></g><g id="connectors"></g><g id="systems"></g><g id="tags"></g><g id="vector-labels"></g><g id="fleet-markers"></g>
+          <g id="map-title"></g><g id="lanes"></g><g id="vectors"></g><g id="connectors"></g><g id="systems"></g><g id="tags"></g><g id="vector-labels"></g><g id="fleet-markers"></g><g id="covert-markers"></g>
         </svg>
         <div id="three-container" hidden></div>
         <div class="map-corner bottom-left"><span id="coordinates">GRID / STRATEGIC OVERVIEW</span><br><span id="map-hint">DRAG TO PAN · SCROLL TO ZOOM</span></div>
@@ -66,7 +67,7 @@
         </div>
         <div id="loading" class="map-loading" role="status">ESTABLISHING NOOSPHERIC LINK…</div>
       </div>
-      <div class="map-bottom"><span>── ── WARP LANE</span><span>▮ POWER LEVEL 1–4 · I / X / C</span><span>◈ FLEET IN ORBIT</span></div>
+      <div class="map-bottom"><span>── ── WARP LANE</span><span>▮ POWER LEVEL 1–4 · I / X / C</span><span>◈ FLEET IN ORBIT</span><span>✠ KILL TEAM OPERATION</span></div>
     </section>
     <aside id="dossier" class="dossier panel" aria-label="Planetary dossier" tabindex="-1"></aside>
   </main>
@@ -74,7 +75,7 @@
   <dialog id="passkey-dialog">
     <form id="passkey-form">
       <span class="eyebrow">RESTRICTED / COMMAND AUTHORITY</span><h2>Warmaster override</h2>
-      <p>Unlock local campaign editing. This static terminal has no server-side authentication; export the state to persist changes.</p>
+      <p>Unlock local campaign editing. This static terminal has no server-side authentication; edits auto-save to this browser — export the state to publish them.</p>
       <label>Command passkey<input id="passkey" type="password" autocomplete="current-password" required></label>
       <p id="passkey-error" role="alert"></p>
       <div class="dialog-actions"><button type="button" id="cancel-passkey">CANCEL</button><button class="primary-button" type="submit">AUTHORIZE</button></div>
@@ -85,6 +86,24 @@
       <span class="eyebrow">COMMAND CONFIRMATION</span><h2 id="confirm-title">Confirm</h2>
       <p id="confirm-message"></p>
       <div class="dialog-actions"><button value="cancel" type="submit">CANCEL</button><button id="confirm-accept" class="danger-button" value="accept" type="submit">CONFIRM</button></div>
+    </form>
+  </dialog>
+  <dialog id="killteam-dialog" class="killteam-dialog">
+    <form id="killteam-form">
+      <span class="eyebrow">COVERT OPERATIONS // OFFICIO ASSASSINORUM CLEARANCE</span><h2>⚔ Deploy Kill Team Operation</h2>
+      <p id="killteam-origin" class="muted"></p>
+      <label>Operation alliance
+        <select id="killteam-alliance" required>
+          <option value="Imperium">Imperium (#E5A93C)</option>
+          <option value="Xenos">Xenos (#33FF33)</option>
+          <option value="Chaos">Chaos (#FF3333)</option>
+        </select>
+      </label>
+      <label>Infiltration target<select id="killteam-target" required></select></label>
+      <label>Operation codename<input id="killteam-codename" type="text" maxlength="80" required list="killteam-codenames" placeholder="e.g. Vox-Array Sabotage" autocomplete="off"></label>
+      <datalist id="killteam-codenames"></datalist>
+      <p id="killteam-error" role="alert"></p>
+      <div class="dialog-actions"><button type="button" id="cancel-killteam">ABORT</button><button class="primary-button" type="submit">⚔ DEPLOY</button></div>
     </form>
   </dialog>
   <noscript><div class="fatal">JavaScript is required to render the vector campaign map.</div></noscript>

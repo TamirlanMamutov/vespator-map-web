@@ -1,5 +1,5 @@
 import * as THREE from "./vendor/three.module.js";
-import { ALLIANCES, MAX_POWER, dominantAlliance, planetNames, activeVectors, isOrbitalStrike } from "./campaign.js";
+import { ALLIANCES, MAX_POWER, dominantAlliance, planetNames, activeVectors, isOrbitalStrike, activeKillTeams } from "./campaign.js";
 import { terrainTheme, seededRandom } from "./terrain.js";
 import { ALLIANCE_EMBLEMS, SHIP_SILHOUETTES, drawEmblem, fleetEmblem, shipKey, shipScale } from "./emblems.js";
 
@@ -947,6 +947,172 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     constructions.splice(index, 1);
   }
 
+  // ---------- Kill team infiltration ----------
+  // A stealth dart streaks down a steep descent cone, then an EM distortion shockwave and glitch scanlines burst at the impact.
+  const infiltrations = [];
+  const INFILTRATE_DESCENT = 0.85;
+  function infiltrate(planetId, alliance) {
+    const planet = data.planets.find((entry) => entry.id === planetId);
+    if (!planet || planet.destroyed || !active || reducedMotion.matches) return false;
+    const hex = new THREE.Color(data.alliances[alliance]?.color || "#33ff33");
+    const additive = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
+    const center = world(planet);
+    const toCamera = camera.position.clone().sub(center).normalize();
+    const normal = toCamera.multiplyScalar(0.55).add(new THREE.Vector3(0, 0.85, 0)).normalize();
+    const impact = normal.clone().multiplyScalar(PLANET_RADIUS);
+    const tangent = new THREE.Vector3().crossVectors(normal, Math.abs(normal.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize();
+    const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+    const start = impact.clone().addScaledVector(normal, PLANET_RADIUS * 7.5).addScaledVector(tangent, PLANET_RADIUS * 1.6);
+    const travel = impact.clone().sub(start);
+    const heading = travel.clone().normalize();
+    const group = new THREE.Group();
+    group.position.copy(center);
+    scene.add(group);
+
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(PLANET_RADIUS * 0.9, travel.length(), 18, 1, true), new THREE.MeshBasicMaterial({ ...additive, color: hex, wireframe: true, opacity: 0.35 }));
+    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), heading.clone().negate());
+    cone.position.copy(start).add(impact).multiplyScalar(0.5);
+    const dart = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.ConeGeometry(2.2, 14, 6), new THREE.MeshBasicMaterial({ color: 0xeaffea }));
+    const fins = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.ConeGeometry(3.2, 9, 3)), new THREE.LineBasicMaterial({ color: hex }));
+    fins.position.y = -3;
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ ...additive, map: glowTexture, color: hex }));
+    glow.scale.setScalar(18);
+    dart.add(body, fins, glow);
+    dart.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), heading);
+    const trailLength = 28;
+    const trailGeometry = new THREE.BufferGeometry();
+    trailGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(trailLength * 3), 3));
+    const trailColors = new Float32Array(trailLength * 3);
+    for (let i = 0; i < trailLength; i++) {
+      const fade = 1 - i / trailLength;
+      trailColors.set([hex.r * fade, hex.g * fade, hex.b * fade], i * 3);
+    }
+    trailGeometry.setAttribute("color", new THREE.BufferAttribute(trailColors, 3));
+    const trail = new THREE.Line(trailGeometry, new THREE.LineBasicMaterial({ ...additive, vertexColors: true }));
+    trail.frustumCulled = false;
+
+    const circle = new THREE.EllipseCurve(0, 0, 1, 1, 0, Math.PI * 2).getPoints(72).map((p) => new THREE.Vector3(p.x, p.y, 0));
+    const ringAt = (opacity) => {
+      const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(circle), new THREE.LineBasicMaterial({ ...additive, color: hex, opacity }));
+      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+      ring.position.copy(impact).addScaledVector(normal, 0.6);
+      ring.visible = false;
+      return ring;
+    };
+    const rings = [ringAt(1), ringAt(0.7), ringAt(0.45)];
+    const flash = new THREE.Sprite(new THREE.SpriteMaterial({ ...additive, map: glowTexture, color: 0xffffff, opacity: 0 }));
+    flash.position.copy(impact);
+    const segments = 46;
+    const glitchGeometry = new THREE.BufferGeometry();
+    glitchGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segments * 6), 3));
+    const glitchColors = new Float32Array(segments * 6);
+    const phosphor = new THREE.Color(PHOSPHOR);
+    for (let i = 0; i < segments * 2; i++) {
+      const tint = i % 4 < 2 ? phosphor : hex;
+      glitchColors.set([tint.r, tint.g, tint.b], i * 3);
+    }
+    glitchGeometry.setAttribute("color", new THREE.BufferAttribute(glitchColors, 3));
+    const glitch = new THREE.LineSegments(glitchGeometry, new THREE.LineBasicMaterial({ ...additive, vertexColors: true, opacity: 0 }));
+    glitch.frustumCulled = false;
+    group.add(cone, dart, trail, flash, glitch, ...rings);
+    const entry = { planetId, group, cone, dart, trail, rings, flash, glitch, start, impact, normal, tangent, bitangent, history: [], age: 0, duration: 3.1, impacted: false };
+    infiltrations.push(entry);
+    stepInfiltration(entry, 0);
+    return true;
+  }
+
+  function stepInfiltration(entry, delta) {
+    entry.age += delta;
+    const descent = Math.min(1, entry.age / INFILTRATE_DESCENT);
+    const eased = descent * descent * descent;
+    const point = entry.start.clone().lerp(entry.impact, eased);
+    entry.dart.position.copy(point);
+    entry.dart.visible = descent < 1;
+    entry.history.unshift(point.clone());
+    entry.history.length = Math.min(entry.history.length, 28);
+    const trail = entry.trail.geometry.attributes.position;
+    for (let i = 0; i < 28; i++) {
+      const sample = entry.history[Math.min(i, entry.history.length - 1)];
+      trail.array.set([sample.x, sample.y, sample.z], i * 3);
+    }
+    trail.needsUpdate = true;
+    entry.trail.material.opacity = descent < 1 ? 1 : Math.max(0, 1 - (entry.age - INFILTRATE_DESCENT) * 3);
+    entry.cone.material.opacity = descent < 1 ? 0.12 + descent * 0.3 : Math.max(0, 0.42 - (entry.age - INFILTRATE_DESCENT) * 0.8);
+    const holder = planetById.get(entry.planetId);
+    const after = entry.age - INFILTRATE_DESCENT;
+    if (after < 0) return;
+    entry.impacted = true;
+    const fade = Math.max(0, 1 - after / (entry.duration - INFILTRATE_DESCENT));
+    entry.rings.forEach((ring, index) => {
+      const local = after - index * 0.22;
+      ring.visible = local > 0;
+      if (!ring.visible) return;
+      const grow = 1 - Math.pow(1 - Math.min(1, local / 1.4), 2);
+      ring.scale.setScalar(2 + grow * PLANET_RADIUS * (1.5 + index * 0.35));
+      ring.material.opacity = (1 - Math.min(1, local / 1.6)) * (index ? 0.7 : 1);
+    });
+    entry.flash.material.opacity = Math.max(0, 1 - after * 3.5);
+    entry.flash.scale.setScalar(20 + after * 90);
+    const glitchFade = Math.max(0, 1 - after / 1.9);
+    entry.glitch.material.opacity = glitchFade * (Math.random() < 0.25 ? 0.25 : 1);
+    const positions = entry.glitch.geometry.attributes.position;
+    const spread = PLANET_RADIUS * (0.25 + Math.min(1, after / 1.2) * 0.9);
+    for (let i = 0; i < positions.count / 2; i++) {
+      const base = entry.impact.clone()
+        .addScaledVector(entry.tangent, (Math.random() - 0.5) * 2 * spread)
+        .addScaledVector(entry.bitangent, (Math.random() - 0.5) * 2 * spread)
+        .addScaledVector(entry.normal, 1 + Math.random() * 3);
+      const end = base.clone().addScaledVector(entry.tangent, 2 + Math.random() * 9);
+      positions.array.set([base.x, base.y, base.z, end.x, end.y, end.z], i * 6);
+    }
+    positions.needsUpdate = true;
+    if (holder) {
+      const planet = data.planets.find((p) => p.id === entry.planetId);
+      const jitter = after < 0.45 ? (0.45 - after) * 3 : 0;
+      if (planet) holder.position.copy(world(planet)).add(new THREE.Vector3((Math.random() - 0.5) * jitter, (Math.random() - 0.5) * jitter, (Math.random() - 0.5) * jitter));
+    }
+    if (fade <= 0) entry.glitch.visible = false;
+  }
+
+  function finishInfiltration(index) {
+    const entry = infiltrations[index];
+    const holder = planetById.get(entry.planetId);
+    const planet = data.planets.find((p) => p.id === entry.planetId);
+    if (holder && planet) holder.position.copy(world(planet));
+    disposeGroup(entry.group);
+    infiltrations.splice(index, 1);
+  }
+
+  // Persistent covert markers: a pulsing skull/dagger beacon tethered above each infiltrated world.
+  let covertMarkers = [];
+  function addCovertMarkers() {
+    covertMarkers = [];
+    const counts = new Map();
+    for (const operation of activeKillTeams(data)) {
+      const planet = data.planets.find((entry) => entry.id === operation.target);
+      if (!planet) continue;
+      const index = counts.get(planet.id) || 0;
+      counts.set(planet.id, index + 1);
+      const center = world(planet);
+      const hex = data.alliances[operation.alliance].color;
+      const angle = -Math.PI / 4 - index * 0.55;
+      const anchor = new THREE.Vector3(Math.cos(angle) * PLANET_RADIUS * 0.75, PLANET_RADIUS * 0.66, Math.sin(angle) * PLANET_RADIUS * 0.75).add(center);
+      const beacon = anchor.clone().add(new THREE.Vector3(Math.cos(angle) * 12, 22, Math.sin(angle) * 12));
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: emblemTexture("killTeam", operation.alliance), transparent: true, depthWrite: false }));
+      sprite.position.copy(beacon);
+      sprite.scale.setScalar(13);
+      sprite.userData.planetId = planet.id;
+      sprite.userData.operation = operation.id;
+      const tether = new THREE.Line(new THREE.BufferGeometry().setFromPoints([anchor, beacon]), new THREE.LineDashedMaterial({ color: hex, dashSize: 2, gapSize: 2, transparent: true, opacity: 0.7 }));
+      tether.computeLineDistances();
+      fleetGroup.add(sprite, tether);
+      selectable.push(sprite);
+      throbs.push({ material: sprite.material, base: 0.75, amp: 0.25, speed: 4, phase: index });
+      covertMarkers.push(sprite);
+    }
+  }
+
   // ---------- Scene sync ----------
   function update(nextData, nextSelection) {
     const selectionChanged = nextSelection !== selection;
@@ -983,6 +1149,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     data.planets.forEach(addPlanet);
     data.warpLanes.forEach((lane) => addLane(lane, planets));
     data.planets.forEach(addFleets);
+    addCovertMarkers();
     activeVectors(data).forEach(addVector);
     projectiles.forEach((projectile) => stepProjectile(projectile, 0));
     ships.forEach(placeShip);
@@ -1149,6 +1316,10 @@ export function createCogitatorView(container, initialData, initialSelection, { 
       stepConstruction(constructions[index], delta);
       if (constructions[index].age >= constructions[index].duration) finishConstruction(index);
     }
+    for (let index = infiltrations.length - 1; index >= 0; index--) {
+      stepInfiltration(infiltrations[index], delta);
+      if (infiltrations[index].age >= infiltrations[index].duration) finishInfiltration(index);
+    }
     if (focusing) {
       target.lerp(focusGoal, Math.min(1, delta * 3));
       if (target.distanceTo(focusGoal) < 0.5) focusing = false;
@@ -1169,6 +1340,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     } else {
       for (let index = effects.length - 1; index >= 0; index--) finishEffect(index);
       for (let index = constructions.length - 1; index >= 0; index--) finishConstruction(index);
+      for (let index = infiltrations.length - 1; index >= 0; index--) finishInfiltration(index);
       for (const debris of debrisById.values()) { debris.visible = true; debris.scale.setScalar(1); }
       spawns.clear();
       planetById.forEach((holder) => holder.scale.setScalar(1));
@@ -1186,5 +1358,5 @@ export function createCogitatorView(container, initialData, initialSelection, { 
 
   update(data, selection);
   fit();
-  return { update, zoom, fit, setActive, setVectors, construct, dispose, debug: { scene, vectors: () => ({ visible: vectorGroup.visible, arcs: vectorGroup.children.length, orbital: vectorGroup.children.filter((group) => group.userData.orbital).length, projectiles: projectiles.length }), effects: () => effects.length, constructions: () => constructions.length, planets: () => planetById.size, ships: () => ships.map((entry) => entry.object.userData.ship), lanes: () => data.warpLanes.length } };
+  return { update, zoom, fit, setActive, setVectors, construct, infiltrate, dispose, debug: { scene, vectors: () => ({ visible: vectorGroup.visible, arcs: vectorGroup.children.length, orbital: vectorGroup.children.filter((group) => group.userData.orbital).length, projectiles: projectiles.length }), effects: () => effects.length, constructions: () => constructions.length, infiltrations: () => infiltrations.length, killTeams: () => covertMarkers.map((sprite) => sprite.userData.operation), planets: () => planetById.size, ships: () => ships.map((entry) => entry.object.userData.ship), lanes: () => data.warpLanes.length } };
 }
