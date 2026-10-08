@@ -1,0 +1,10 @@
+{
+  "name": "vespator-map-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/campaign.test.js",
+    "build": "python build.py"
+  }
+}
