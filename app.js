@@ -13,6 +13,10 @@ import {
 } from "./emblems.js";
 import { terrainTheme } from "./terrain.js";
 import { settings } from "./config.js";
+import {
+  uplinkReady, normalizeUplink, loadUplink, saveUplink, forgetToken, maskToken,
+  readRemoteFile, readRemoteText, writeRemoteFile, verifyUplink,
+} from "./uplink.js";
 
 const $ = (id) => document.getElementById(id);
 const svgNS = "http://www.w3.org/2000/svg";
@@ -43,6 +47,22 @@ let threeActive = false;
 let threeLoading = false;
 let showVectors = readPreference("vespator.vectors") !== "off";
 let indexCollapsed = readPreference("vespator.index") === "collapsed";
+const POLL_SECONDS = Math.max(0, Number(settings.feedPollSeconds) || 0);
+const mobileQuery = matchMedia("(max-width: 960px)");
+let uplink = loadUplink(...deviceStorage(), { repo: settings.uplinkRepo, branch: settings.uplinkBranch, path: settings.uplinkPath });
+let feedSource = "campaign_data.json";
+let feedWarning = "";
+let feedHeld = false;
+let lastFeedCheck = 0;
+let syncing = false;
+let transmitting = false;
+let pollTimer = null;
+let drawerOpen = false;
+
+// The Storage getters themselves can throw (sandboxed iframes, some privacy modes).
+function deviceStorage() {
+  try { return [localStorage, sessionStorage]; } catch { return [null, null]; }
+}
 
 function readPreference(name) {
   try { return localStorage.getItem(name); } catch { return null; }
@@ -214,6 +234,7 @@ function selectPlanet(id, focus = false) {
   if (!planetById(campaign, id)) return;
   selectedId = id;
   render();
+  if (mobileQuery.matches) setDrawer(true);
   const planet = currentPlanet();
   if (focus && !threeActive) {
     const point = pos(planet);
@@ -236,11 +257,19 @@ function render() {
   $("override").textContent = warmaster ? "◇ LOCK COMMAND" : "◇ WARMASTER OVERRIDE";
   $("export").hidden = !warmaster;
   $("reset-state").hidden = !warmaster;
+  $("publish").hidden = !warmaster;
+  $("uplink").hidden = !warmaster;
+  $("publish").classList.toggle("pending", dirty);
+  $("uplink").classList.toggle("linked", uplinkReady(uplink));
+  $("uplink").textContent = uplinkReady(uplink) ? "☁ CLOUD UPLINK ✓" : "☁ CLOUD UPLINK";
+  $("uplink").title = uplinkReady(uplink) ? `Linked to ${uplink.repo}@${uplink.branch} (token ${maskToken(uplink.token)})` : "Configure the GitHub repository, branch and token used for publishing";
   $("export").classList.toggle("pending", dirty);
   $("unsaved").classList.toggle("dirty", dirty);
-  $("unsaved").textContent = !dirty ? "Source: campaign_data.json"
-    : storageHealthy ? "LIVE STATE AUTO-SAVED to this browser. EXPORT COGITATOR STATE to publish it to campaign_data.json."
-      : "UNEXPORTED CHANGES — auto-save unavailable, local memory only. Export before closing.";
+  $("unsaved").textContent = !dirty ? `Source: ${feedSource}`
+    : storageHealthy ? "LIVE STATE AUTO-SAVED to this browser. TRANSMIT TO WAR COUNCIL (or EXPORT) to publish it to every player."
+      : "UNPUBLISHED CHANGES — auto-save unavailable, local memory only. Transmit or export before closing.";
+  $("drawer-title").textContent = `DOSSIER // ${currentPlanet()?.name ?? "—"}`;
+  updateFeedClock();
   updateHint();
   updateVectorToggle();
   threeView?.update(campaign, selectedId);
@@ -1364,7 +1393,7 @@ $("export").addEventListener("click", () => {
     dirty = false;
     persistState();
     render();
-    $("unsaved").textContent = "Exported. Replace MapWebPage/campaign_data.json with the download and commit it to publish.";
+    $("unsaved").textContent = "Exported. Replace MapWebPage/campaign_data.json with the download and commit it — or use TRANSMIT TO WAR COUNCIL to publish directly.";
     report("campaign_data.json exported. Commit it so the site and Discord bot pick up the new state.");
   } catch (error) {
     report(`Export failed: ${error.message}`, true);
@@ -1405,15 +1434,371 @@ window.addEventListener("beforeunload", (event) => {
 let lastSynced = 0;
 let feedFingerprint = null;
 
+// With a Cloud Uplink token on this device the feed is read straight from the repository branch, so a Warmaster
+// sees a transmission immediately instead of waiting for the Pages rebuild. Everyone else reads the site copy.
 async function fetchCampaign() {
-  // no-store skips the HTTP cache; the query string also defeats CDN/proxy caches (e.g. GitHub Pages).
-  const response = await fetch(`./campaign_data.json?t=${Date.now()}`, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Campaign feed returned HTTP ${response.status}.`);
-  const data = await response.json();
+  let text = null;
+  let source = "campaign_data.json";
+  feedWarning = "";
+  if (uplinkReady(uplink)) {
+    try {
+      text = await readRemoteText(uplink);
+      source = `GitHub ${uplink.repo}@${uplink.branch}`;
+    } catch (error) {
+      feedWarning = ` Cloud Uplink read failed (${error.message}) — using the site feed.`;
+    }
+  }
+  if (text === null) {
+    // no-store skips the HTTP cache; the query string also defeats CDN/proxy caches (e.g. GitHub Pages).
+    const response = await fetch(`./campaign_data.json?t=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Campaign feed returned HTTP ${response.status}.`);
+    text = await response.text();
+  }
+  const data = JSON.parse(text);
   lastSynced = normalizeCampaign(data);
   feedFingerprint = campaignFingerprint(serializeCampaign(data));
+  feedSource = source;
+  lastFeedCheck = Date.now();
   return data;
 }
+
+const clock = (time) => new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+function updateFeedClock() {
+  const node = $("feed-clock");
+  node.textContent = !lastFeedCheck ? "FEED —"
+    : feedHeld ? `FEED ⚠ UPDATE HELD ${clock(lastFeedCheck)}`
+      : `FEED ${clock(lastFeedCheck)}${POLL_SECONDS ? ` · AUTO ${POLL_SECONDS}s` : ""}`;
+  node.classList.toggle("held", feedHeld);
+  node.title = `Source: ${feedSource}${POLL_SECONDS ? ` · re-checked every ${POLL_SECONDS} seconds while no local edits are pending` : ""}`;
+  $("resync").title = lastFeedCheck ? `Pull the latest published campaign now (last check ${clock(lastFeedCheck)} from ${feedSource})` : "Pull the latest published campaign now";
+}
+
+// Swaps in a newer published feed while keeping the selected world and the current camera.
+function adoptFeed(data) {
+  campaign = data;
+  baseline = feedFingerprint;
+  dirty = false;
+  feedHeld = false;
+  if (hasStoredState()) persistState();
+  if (!planetById(campaign, selectedId)) selectedId = campaign.planets[0].id;
+  recentConstruction = null;
+  recentKillTeam = null;
+  recentExterminatus = null;
+  clearGesture();
+  renderLegend();
+  render();
+}
+
+// Pulls the published feed. Unpublished local edits are never overwritten by an automatic sync.
+async function syncFeed({ manual = false } = {}) {
+  if (!campaign || syncing || transmitting) return;
+  syncing = true;
+  const previous = feedFingerprint;
+  try {
+    const data = await fetchCampaign();
+    const current = campaignFingerprint(serializeCampaign(campaign));
+    if (feedFingerprint === current) {
+      feedHeld = false;
+      if (dirty || baseline !== feedFingerprint) {
+        dirty = false;
+        baseline = feedFingerprint;
+        if (hasStoredState()) persistState();
+        render();
+      }
+      updateFeedClock();
+      if (manual) report(`War Council feed verified: this cogitator matches ${feedSource}.${feedWarning}`, Boolean(feedWarning));
+      return;
+    }
+    if (dirty) {
+      const fresh = feedFingerprint !== previous;
+      feedHeld = feedHeld || fresh;
+      updateFeedClock();
+      if (manual || fresh) report(`A newer War Council feed is on ${feedSource}, but this browser holds unpublished edits — TRANSMIT them or RESET to adopt the feed.`, true);
+      return;
+    }
+    if (!manual && feedFingerprint === previous) { updateFeedClock(); return; }
+    adoptFeed(data);
+    report(`War Council feed ${manual ? "re-synced" : "auto-synced"} ${clock(lastFeedCheck)} from ${feedSource}: ${activeVectors(campaign).length} assaults, ${activeKillTeams(campaign).length} kill team ops.${feedWarning}`, Boolean(feedWarning));
+  } catch (error) {
+    if (manual) report(`Resync failed: ${error.message}`, true);
+    else $("feed-clock").textContent = `FEED ⚠ OFFLINE ${clock(Date.now())}`;
+  } finally {
+    syncing = false;
+  }
+}
+
+function autoSync() {
+  if (!campaign || document.hidden || gesture || document.querySelector("dialog[open]")) return;
+  syncFeed();
+}
+
+function startFeedPolling() {
+  if (!POLL_SECONDS || pollTimer) return;
+  pollTimer = setInterval(autoSync, POLL_SECONDS * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - lastFeedCheck > 15000) autoSync(); });
+  window.addEventListener("online", autoSync);
+}
+
+async function manualResync() {
+  if (!campaign || syncing || transmitting) return;
+  if (!dirty) { await syncFeed({ manual: true }); return; }
+  if (!(await confirmAction("Resync campaign feed", `This browser holds unpublished edits. Discard them and load the latest feed from ${feedSource}? Use TRANSMIT TO WAR COUNCIL first to keep them.`, "DISCARD & RESYNC"))) return;
+  try {
+    await restoreCanonical();
+    report(`Feed re-synced from ${feedSource}: ${campaign.planets.length} systems, ${campaign.warpLanes.length} warp lanes, ${activeVectors(campaign).length} assaults.${twistNote()}${feedWarning}`, Boolean(feedWarning));
+  } catch (error) {
+    report(`Re-sync failed: ${error.message}`, true);
+  }
+}
+
+$("resync").addEventListener("click", manualResync);
+
+// ---------- Cogitator Cloud Uplink (GitHub Contents API) ----------
+function setUplinkStatus(message, error = false) {
+  $("uplink-status").textContent = message;
+  $("uplink-status").classList.toggle("error", error);
+}
+
+function openUplinkDialog(note = "") {
+  $("uplink-repo").value = uplink.repo || settings.uplinkRepo || "";
+  $("uplink-branch").value = uplink.branch || settings.uplinkBranch || "main";
+  $("uplink-token").value = "";
+  $("uplink-token").placeholder = uplink.token ? `saved ${maskToken(uplink.token)} — leave blank to keep` : "github_pat_…";
+  $("uplink-remember").checked = uplink.remember !== false;
+  $("uplink-forget").disabled = !uplink.token;
+  setUplinkStatus(note || (uplinkReady(uplink) ? `Linked to ${uplink.repo}@${uplink.branch}.` : "Not linked: enter a repository and token."), Boolean(note));
+  $("uplink-dialog").showModal();
+  (uplink.repo ? $("uplink-token") : $("uplink-repo")).focus();
+}
+
+const uplinkDraft = () => normalizeUplink({
+  repo: $("uplink-repo").value,
+  branch: $("uplink-branch").value,
+  path: uplink.path || settings.uplinkPath,
+  token: $("uplink-token").value.trim() || uplink.token,
+});
+
+$("uplink").addEventListener("click", () => { if (warmaster) openUplinkDialog(); });
+$("cancel-uplink").addEventListener("click", () => $("uplink-dialog").close());
+
+$("uplink-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  try {
+    const draft = uplinkDraft();
+    if (!draft.token) throw new Error("A personal access token is required to publish.");
+    const remember = $("uplink-remember").checked;
+    uplink = saveUplink(draft, { remember }, ...deviceStorage());
+    $("uplink-token").value = "";
+    $("uplink-dialog").close();
+    render();
+    report(`Cloud Uplink linked to ${uplink.repo}@${uplink.branch}; token ${remember ? "remembered on this device" : "kept until this tab closes"}.`);
+    syncFeed();
+  } catch (error) {
+    setUplinkStatus(error.message, true);
+  }
+});
+
+$("uplink-test").addEventListener("click", async () => {
+  const button = $("uplink-test");
+  let draft;
+  try {
+    draft = uplinkDraft();
+    if (!draft.token) throw new Error("Enter a personal access token to test the link.");
+  } catch (error) {
+    setUplinkStatus(error.message, true);
+    return;
+  }
+  button.disabled = true;
+  setUplinkStatus(`Hailing ${draft.repo}@${draft.branch}…`);
+  try {
+    const result = await verifyUplink(draft);
+    const access = result.canPush === false ? "⚠ token is READ-ONLY — it cannot publish" : result.canPush ? "write access confirmed" : "access granted";
+    const file = result.fileExists ? `${draft.path} signature ${result.sha.slice(0, 7)}` : `${draft.path} not on this branch yet — the first transmission creates it`;
+    setUplinkStatus(`✓ Contact established: ${draft.repo} (${result.private ? "private" : "public"}), ${access}; ${file}.`, result.canPush === false);
+  } catch (error) {
+    setUplinkStatus(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("uplink-forget").addEventListener("click", () => {
+  forgetToken(...deviceStorage());
+  uplink = { ...uplink, token: "" };
+  $("uplink-forget").disabled = true;
+  $("uplink-token").placeholder = "github_pat_…";
+  setUplinkStatus("Token erased from this device.");
+  render();
+  report("Cloud Uplink token erased from this device. The feed is read from the site again.");
+});
+
+function transmitLog(text, state = "ok") {
+  const item = element("li", { class: state, text });
+  $("transmit-log").append(item);
+  item.scrollIntoView?.({ block: "nearest" });
+}
+
+function transmitProgress(fraction) {
+  $("transmit-progress").style.width = `${Math.round(fraction * 100)}%`;
+}
+
+function openTransmit() {
+  const dialog = $("transmit-dialog");
+  dialog.classList.remove("success", "failure");
+  $("transmit-title").textContent = "TRANSMITTING ASTROPATHIC COGITATOR FEED...";
+  $("transmit-log").replaceChildren();
+  $("transmit-result").replaceChildren();
+  $("transmit-close").disabled = true;
+  transmitProgress(0.05);
+  dialog.showModal();
+}
+
+function finishTransmit(ok, title, detail, link) {
+  const dialog = $("transmit-dialog");
+  dialog.classList.add(ok ? "success" : "failure");
+  $("transmit-title").textContent = title;
+  transmitProgress(1);
+  $("transmit-result").replaceChildren(detail, ...(link ? [" ", element("a", { href: link, target: "_blank", rel: "noopener noreferrer", text: "VIEW COMMIT ↗" })] : []));
+  $("transmit-close").disabled = false;
+  $("transmit-close").focus();
+}
+
+$("transmit-close").addEventListener("click", () => $("transmit-dialog").close());
+$("transmit-dialog").addEventListener("cancel", (event) => { if (transmitting) event.preventDefault(); });
+
+const commitMessage = () => `Cogitator: War Council update (${campaign.planets.length} systems, ${activeVectors(campaign).length} assaults, ${activeKillTeams(campaign).length} kill team ops)\n\nPublished from the Imperial Cogitator web terminal via the GitHub Contents API.`;
+
+// Remote file -> fingerprint comparable with our own serialization (null when unreadable).
+function remoteFingerprint(text) {
+  try {
+    const data = JSON.parse(text);
+    normalizeCampaign(data);
+    return campaignFingerprint(serializeCampaign(data));
+  } catch {
+    return null;
+  }
+}
+
+async function transmit() {
+  if (!warmaster || transmitting || !campaign) return;
+  if (!uplinkReady(uplink)) { openUplinkDialog("Link a repository and token before transmitting."); return; }
+  let text;
+  try { text = serializeCampaign(campaign); } catch (error) { report(`Transmission blocked: ${error.message}`, true); return; }
+  const ours = campaignFingerprint(text);
+  transmitting = true;
+  openTransmit();
+  try {
+    transmitLog(`ESTABLISHING ASTROPATHIC LINK → ${uplink.repo}@${uplink.branch}`);
+    transmitLog(`LOCATING FEED SIGNATURE: ${uplink.path}`);
+    const remote = await readRemoteFile(uplink);
+    transmitProgress(0.35);
+    const theirs = remote?.text != null ? remoteFingerprint(remote.text) : null;
+    transmitLog(remote ? `FEED SIGNATURE ${remote.sha.slice(0, 7)} ACQUIRED` : "NO FEED ON BRANCH — A NEW ONE WILL BE INSCRIBED");
+    if (remote && theirs === ours) {
+      transmitLog("REMOTE FEED ALREADY MATCHES THIS COGITATOR");
+      dirty = false;
+      baseline = ours;
+      feedFingerprint = ours;
+      feedHeld = false;
+      persistState();
+      render();
+      finishTransmit(true, "TRANSMITTING ASTROPATHIC COGITATOR FEED... SUCCESS", "War Council already holds this exact state; nothing to commit.");
+      report(`War Council feed already up to date on ${uplink.repo}@${uplink.branch}.`);
+      return;
+    }
+    if (remote && theirs !== baseline) {
+      transmitLog("⚠ FEED DIVERGENCE: GITHUB CHANGED SINCE THIS COGITATOR SYNCED", "warn");
+      const overwrite = await confirmAction("Feed divergence detected",
+        `${uplink.path} on ${uplink.repo}@${uplink.branch} changed since this cogitator last synced (another Warmaster, the Discord bot, or a manual commit). Transmitting will overwrite those changes. Continue?`,
+        "OVERWRITE");
+      if (!overwrite) {
+        transmitLog("TRANSMISSION ABORTED BY WARMASTER", "fail");
+        finishTransmit(false, "TRANSMISSION ABORTED", "Nothing was committed. RESYNC to review the newer feed, or transmit again to overwrite it.");
+        report("Transmission aborted: the War Council feed changed on GitHub. Nothing was committed.", true);
+        return;
+      }
+    }
+    const bytes = new TextEncoder().encode(text).length;
+    transmitLog(`ENCODING NOOSPHERIC PAYLOAD (BASE64, ${bytes.toLocaleString()} BYTES)`);
+    transmitProgress(0.55);
+    transmitLog("TRANSMITTING ASTROPATHIC COGITATOR FEED...");
+    const result = await writeRemoteFile(uplink, { text, sha: remote?.sha, message: commitMessage() });
+    transmitProgress(0.9);
+    dirty = false;
+    baseline = ours;
+    feedFingerprint = ours;
+    feedSource = `GitHub ${uplink.repo}@${uplink.branch}`;
+    feedHeld = false;
+    lastFeedCheck = Date.now();
+    persistState();
+    render();
+    const commit = result.commitSha ? result.commitSha.slice(0, 7) : "accepted";
+    transmitLog(`COMMIT ${commit} INSCRIBED ON ${uplink.branch.toUpperCase()}`);
+    finishTransmit(true, "TRANSMITTING ASTROPATHIC COGITATOR FEED... SUCCESS",
+      `Commit ${commit} is live on ${uplink.repo}@${uplink.branch}. The Discord bot sees it now; players see it after the site redeploys (about a minute).`, result.commitUrl);
+    report(`Transmission complete: commit ${commit} published to ${uplink.repo}@${uplink.branch}.`);
+  } catch (error) {
+    transmitLog(`✕ ${error.message}`, "fail");
+    finishTransmit(false, "TRANSMISSION FAILED", "Your edits are still auto-saved in this browser. Fix the problem and transmit again.");
+    report(`Transmission failed: ${error.message}`, true);
+  } finally {
+    transmitting = false;
+  }
+}
+
+$("publish").addEventListener("click", transmit);
+
+// ---------- Mobile touch drawers (command HUD + dossier) ----------
+function setDrawer(open) {
+  drawerOpen = open;
+  document.body.classList.toggle("drawer-open", open);
+  $("dossier-handle").setAttribute("aria-expanded", String(open));
+  $("dossier").inert = mobileQuery.matches && !open;
+}
+
+function setCommandDrawer(open) {
+  document.body.classList.toggle("command-open", open);
+  $("hud-menu").setAttribute("aria-expanded", String(open));
+  $("hud-menu").textContent = open ? "✕ CLOSE" : "☰ COMMAND";
+}
+
+$("hud-menu").addEventListener("click", () => setCommandDrawer(!document.body.classList.contains("command-open")));
+$("hud-actions").addEventListener("click", (event) => { if (mobileQuery.matches && event.target.closest("button")) setCommandDrawer(false); });
+
+{
+  const handle = $("dossier-handle");
+  let startY = null;
+  let swiped = false;
+  handle.addEventListener("pointerdown", (event) => { startY = event.clientY; });
+  handle.addEventListener("pointercancel", () => { startY = null; });
+  handle.addEventListener("pointerup", (event) => {
+    if (startY === null) return;
+    const delta = event.clientY - startY;
+    startY = null;
+    if (Math.abs(delta) > 28) { swiped = true; setDrawer(delta < 0); }
+  });
+  handle.addEventListener("click", () => {
+    if (swiped) { swiped = false; return; }
+    setDrawer(!drawerOpen);
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !mobileQuery.matches || document.querySelector("dialog[open]")) return;
+  if (document.body.classList.contains("command-open")) setCommandDrawer(false);
+  else if (drawerOpen) setDrawer(false);
+});
+let drawerMobile = mobileQuery.matches;
+function syncDrawerMode() {
+  if (mobileQuery.matches === drawerMobile) return;
+  drawerMobile = mobileQuery.matches;
+  setDrawer(drawerOpen);
+  if (!drawerMobile) setCommandDrawer(false);
+}
+mobileQuery.addEventListener("change", syncDrawerMode);
+window.addEventListener("resize", syncDrawerMode);
+setDrawer(false);
 
 const twistNote = () => lastSynced ? ` Legacy terrain migrated to official twists on ${lastSynced} world${lastSynced === 1 ? "" : "s"}; export to persist.` : "";
 
@@ -1467,16 +1852,7 @@ async function restoreCanonical() {
 
 const hasStoredState = () => { try { return localStorage.getItem(STORAGE_KEY) !== null; } catch { return false; } };
 
-$("reload-feed").addEventListener("click", async () => {
-  if (!campaign) return;
-  if ((dirty || hasStoredState()) && !(await confirmAction("Re-sync campaign feed", "Discard the live auto-saved campaign state in this browser and reload campaign_data.json from the server?", "RE-SYNC"))) return;
-  try {
-    await restoreCanonical();
-    report(`Feed re-synced: ${campaign.planets.length} systems, ${campaign.warpLanes.length} warp lanes, ${activeVectors(campaign).length} assaults.${twistNote()}`);
-  } catch (error) {
-    report(`Re-sync failed: ${error.message}`, true);
-  }
-});
+$("reload-feed").addEventListener("click", manualResync);
 
 $("reset-state").addEventListener("click", async () => {
   if (!campaign || !warmaster) return;
@@ -1524,15 +1900,17 @@ async function initialize() {
       const when = stored.savedAt ? new Date(stored.savedAt).toLocaleString() : "an earlier session";
       const drift = !feed ? " Campaign feed unreachable; running from local memory."
         : stored.baseline && stored.baseline !== feedFingerprint && dirty ? " NOTICE: campaign_data.json has changed since this state was saved — use RESET TO ORIGINAL CANONICAL STATE to adopt it." : "";
-      report(`Live campaign restored from local auto-save (${when}): ${counts}.${drift}`, Boolean(drift));
+      report(`Live campaign restored from local auto-save (${when}): ${counts}.${drift}${feedWarning}`, Boolean(drift || feedWarning));
     } else {
-      report(`Noospheric link established: ${counts}. Player observation mode.${twistNote()}`);
+      report(`Noospheric link established via ${feedSource}: ${counts}. Player observation mode${POLL_SECONDS ? `, auto-sync every ${POLL_SECONDS}s` : ""}.${twistNote()}${feedWarning}`, Boolean(feedWarning));
     }
+    startFeedPolling();
   } catch (error) {
     $("loading").textContent = `FEED FAILURE: ${error.message} Serve this folder over HTTP, check campaign_data.json, and reload.`;
     $("override").disabled = true;
     $("import-button").disabled = true;
     $("reload-feed").disabled = true;
+    $("resync").disabled = true;
     $("view-toggle").disabled = true;
     $("vector-toggle").disabled = true;
     report(error.message, true);

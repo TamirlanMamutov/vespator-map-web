@@ -54,6 +54,8 @@ A static, dependency-free tactical campaign terminal for the *War on the Vespato
   - a construction effect: a rotating wireframe scaffold sphere with particle sparks
   - an Exterminatus animation that shatters the world into flaming debris
 - **Retro CRT look:** scanlines, flicker, phosphor glow, and terminal typography. Respects `prefers-reduced-motion`.
+- **Cloud Uplink and live sync:** the Warmaster publishes straight to GitHub from any device. Players auto-sync every 60 seconds or with **↻ RESYNC**.
+- **Mobile / iOS Safari:** at 960px wide or less, the HUD commands fold into a **☰ COMMAND** drawer with 44px touch targets. The Planetary Dossier becomes a bottom sheet: tap or swipe its handle, and it opens automatically when you select a world. The layout respects safe areas (notch, home bar), and inputs use 16px text so iOS doesn't zoom in.
 
 ## Run locally (zero install)
 
@@ -85,6 +87,7 @@ Press **◇ WARMASTER OVERRIDE** and enter the passkey from [`config.js`](config
 | Launch Assault | In the dossier's **OFFENSIVE VECTORS** section, pick the attacking alliance and a target: either a world connected by a direct lane, or **⊙ ORBITAL STRIKE** against the host world itself. Add an optional designation, then press **⚔ LAUNCH ASSAULT**. The source must be intact, the target not destroyed, and the same from/to/alliance cannot be launched twice. Press **✕** on a vector card to recall it. |
 | Kill Team | **[ ⚔ DEPLOY KILL TEAM OPERATION ]** in the dossier's **COVERT OPERATIONS** section opens a panel: pick the operation alliance (Imperium / Xenos / Chaos), the infiltration target (any intact world; the current world is listed first), and a codename (suggestions include "Operative Extraction", "Vox-Array Sabotage", "Crypt Infiltration"). Codenames are 1–80 characters and must be unique per target world. Press **✕** on an operation card to extract the team. |
 | Persist | **⇩ EXPORT COGITATOR STATE** downloads an updated `campaign_data.json` with the lanes, offensive vectors (including orbital strikes), kill team operations, infrastructure and terrain twists. |
+| Publish | **[ ☁ TRANSMIT TO WAR COUNCIL (PUBLISH) ]** commits the live state straight to `campaign_data.json` on GitHub (see [Cloud Uplink](#cloud-uplink-publish-from-any-device)). **☁ CLOUD UPLINK** configures the repository, branch and token. |
 | Reset | **[ ↺ RESET TO ORIGINAL CANONICAL STATE ]** asks for confirmation, then wipes the local auto-save and reloads `campaign_data.json`. |
 
 > The passkey is only a UI lock: anyone can read the static files. Real authority is whoever can commit to the repository.
@@ -99,13 +102,45 @@ On page load:
 2. If nothing is saved, `campaign_data.json` is the baseline.
 3. If a saved state has been **exported** (nothing unexported) and the server's `campaign_data.json` has since changed, the newer feed wins and the old auto-save is discarded. Unexported edits are never discarded automatically; instead a notice says the feed has drifted.
 
-Auto-save is per browser and per device. To publish changes for everyone:
+Auto-save is per browser and per device. To publish changes for everyone, either press **☁ TRANSMIT TO WAR COUNCIL** (below), or do it by hand:
 
 1. **⇩ EXPORT COGITATOR STATE**.
 2. Replace `MapWebPage/campaign_data.json` with the downloaded file.
 3. Commit and push. The site redeploys, and the Discord bot reads the new state.
 
-**↺ RESET TO ORIGINAL CANONICAL STATE** (Warmaster only) and **↻ RE-SYNC FEED** both clear the auto-save and reload `campaign_data.json` after a confirmation. **↑ LOAD JSON** loads a file for previewing and auto-saves it. Every fetch uses `cache: "no-store"` plus a timestamp query string, so neither the browser nor the GitHub Pages CDN serves a stale copy. If `localStorage` is unavailable (private mode, quota), the status line says so and the page warns before closing with unexported edits.
+**↺ RESET TO ORIGINAL CANONICAL STATE** (Warmaster only) clears the auto-save and reloads `campaign_data.json` after a confirmation. **↻ RESYNC** (HUD) and **↻ RE-SYNC FEED** (index) pull the latest feed; they only ask for confirmation when this browser holds unpublished edits. **↑ LOAD JSON** loads a file for previewing and auto-saves it. Every fetch uses `cache: "no-store"` plus a timestamp query string, so neither the browser nor the GitHub Pages CDN serves a stale copy. If `localStorage` is unavailable (private mode, quota), the status line says so and the page warns before closing with unexported edits.
+
+## Live auto-sync for players
+
+Whenever this browser has **no unpublished edits**, the cogitator re-reads `campaign_data.json?t=<timestamp>` every **60 seconds** (`feedPollSeconds` in [`config.js`](config.js); `0` disables polling), and again when the tab returns to the foreground. A newer feed is adopted in place: the selected world, camera and 2D/3D view are kept. The map header shows **FEED hh:mm:ss · AUTO 60s**. Press **↻ RESYNC** to pull immediately.
+
+Unpublished Warmaster edits are never overwritten automatically. If a newer feed arrives while you have edits, the header shows **FEED ⚠ UPDATE HELD**: either transmit your edits (the cogitator warns about the divergence first) or RESET to adopt the feed.
+
+Players read the copy served with the site, so they see a transmission once the Pages workflow has redeployed (about a minute). A device with a Cloud Uplink token reads directly from the repository branch through the API, so it sees the change immediately.
+
+## Cloud Uplink (publish from any device)
+
+The Warmaster can commit the live campaign to GitHub from a phone or desktop, with no git client, using the [GitHub Contents API](https://docs.github.com/en/rest/repos/contents).
+
+1. Create a **fine-grained personal access token** at GitHub → Settings → Developer settings → Fine-grained tokens:
+   - Repository access: **Only select repositories** → `vespator-map-web`
+   - Permissions: **Contents: Read and write** (Metadata: read-only is added automatically). Nothing else.
+   - A short expiry, for example 30–90 days.
+2. Unlock Warmaster mode and press **☁ CLOUD UPLINK**. Enter the repository (`owner/repo`; defaults from `uplinkRepo` in `config.js`), the branch (default `main`) and the token. **TEST LINK** checks access and push permission; **SAVE UPLINK** stores the settings.
+3. Press **[ ☁ TRANSMIT TO WAR COUNCIL (PUBLISH) ]**. The cogitator:
+   1. `GET /repos/{owner}/{repo}/contents/campaign_data.json?ref={branch}` to read the current file SHA;
+   2. if GitHub's file changed since this browser last synced (another Warmaster, the bot, a manual commit), asks before overwriting;
+   3. `PUT /repos/{owner}/{repo}/contents/campaign_data.json` with the base64 (UTF-8) JSON, the SHA and the branch;
+   4. shows **TRANSMITTING ASTROPATHIC COGITATOR FEED... SUCCESS** with a link to the commit, and clears the unpublished-edits flag.
+
+   The commit triggers the Pages workflow, so the site redeploys for every player. Errors (expired token, missing permission, 409 conflict, rate limit, offline, 30 s timeout) appear in the transmission log; the edits stay auto-saved so you can retry.
+
+**Token storage and security**
+
+- The token is stored only in this browser: in `localStorage` (`vespator_cogitator_uplink`) when *Remember on this device* is ticked, otherwise in `sessionStorage` until the tab closes. **FORGET TOKEN** erases it. Enter it once per device.
+- It is sent only to `api.github.com`. It is never written into the campaign state, exports, commits or the repository.
+- Browser storage is not a vault. Any script running on the same origin can read it, and all `<user>.github.io` project sites share one origin. Only use a token scoped to this one repository with Contents permission, keep its expiry short, and revoke it on GitHub if a device is lost.
+- The Warmaster passkey is only a UI lock. The token is what actually grants write access.
 
 ## Data schema
 
@@ -175,7 +210,7 @@ Unknown extra properties are preserved on export.
 ## Tests and build
 
 ```bash
-npm test          # node --test: rules, data integrity, emblems, terrain themes
+npm test          # node --test: rules, data integrity, emblems, terrain themes, Cloud Uplink API client
 python build.py   # copies the static site + vendor/ into dist/
 ```
 
@@ -212,7 +247,7 @@ The neighbouring `DiscordBot/` folder is a separate project; nothing here modifi
 - **Write:** have the bot (or a Warmaster) commit an updated `campaign_data.json`, either with `git commit` + `git push` or the contents API `PUT` with the file's current `sha`. The Pages workflow redeploys automatically. Keep to the schema above. Slots are `"empty"`, `"active"`, or `{ type, alliance?, destroyed? }`. Strongholds are named `<Imperial|Xenos|Chaos> Stronghold`, and other typed slots are `Fortification Line`, `Support Facility`, or `Staging Grounds`. When reading over HTTP, add a cache-busting query (`?t=<timestamp>`) so the bot always sees the latest deploy.
 - **Offensive vectors:** read `offensiveVectors` to announce active assaults, for example "⚔ Chaos — Warp Incursion: Pluto II → Nickel". A vector whose `from` equals its `to` is an orbital strike on that world, for example "⊙ Chaos — Orbital Bombardment: Pluto II". Ignore any vector whose source or target has `destroyed: true`; `activeVectors` does this. A bot can add an assault with `launchAssault(data, from, to, alliance, label)` or remove one with `recallAssault(data, index)`, then commit the file.
 - **Kill teams:** read `activeKillTeams` to announce covert ops, for example "✠ Xenos — Crypt Infiltration: Sidon". Operations on a destroyed world are dormant; `activeKillTeams(data)` filters them out. A bot can add one with `deployKillTeam(data, from, target, alliance, codename)` or remove one with `extractKillTeam(data, id)`. The array is optional: a file without it loads as `[]`.
-- Live edits in a Warmaster's browser exist only in that browser's `localStorage` until exported and committed, so the bot only sees the committed file.
+- Live edits in a Warmaster's browser exist only in that browser's `localStorage` until they are transmitted (Cloud Uplink) or exported and committed, so the bot only sees the committed file. A transmission is a normal commit: the bot can read it immediately through the contents API (above), or over Pages once the redeploy finishes. Before writing, a bot should read the file's current `sha` and send it with its `PUT`, so it can never silently overwrite a Warmaster's transmission; GitHub answers `409` if the file changed in between.
 - Useful helpers for a JavaScript bot: `normalizeCampaign`, `validateCampaign`, `activeVectors`, `constructInfrastructure`, `moveFleet`, `setPowerLevel`, `setSlot`, `slotInfo`, `fleetTitle`, and `serializeCampaign` from [`campaign.js`](campaign.js) are pure ES modules with no DOM dependencies.
 
 ## Files
@@ -224,7 +259,8 @@ The neighbouring `DiscordBot/` folder is a separate project; nothing here modifi
 | `view3d.js` | Integrated Three.js Cogitator 3D view (lazy-loaded on toggle) |
 | `campaign.js` | Schema validation and campaign rules |
 | `emblems.js`, `terrain.js` | Faction insignia, ship silhouettes, the 9 terrain twist glyphs, and terrain surface/3D effect themes |
-| `config.js` | Warmaster passkey and map scale |
+| `config.js` | Warmaster passkey, map scale, Cloud Uplink defaults (`uplinkRepo`, `uplinkBranch`, `uplinkPath`) and `feedPollSeconds` |
+| `uplink.js` | GitHub Contents API client (read SHA, PUT commit, verify access) and device token storage; no DOM dependencies |
 | `vendor/` | Three.js r180 (MIT) |
 | `tests/` | Node test suite |
 | `build.py`, `.github/workflows/deploy.yml` | Static build and GitHub Pages deployment |

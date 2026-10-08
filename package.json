@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/campaign.test.js",
+    "test": "node --test tests/campaign.test.js tests/uplink.test.js",
     "build": "python build.py"
   }
 }

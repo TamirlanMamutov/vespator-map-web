@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 FILES = ("index.html", "styles.css", "app.js", "campaign.js", "emblems.js",
-         "terrain.js", "view3d.js", "config.js", "campaign_data.json", "icon.svg")
+         "terrain.js", "view3d.js", "config.js", "uplink.js", "campaign_data.json", "icon.svg")
 VENDOR_FILES = ("three.module.js", "three.core.js", "THREE-LICENSE.txt")
 
 
