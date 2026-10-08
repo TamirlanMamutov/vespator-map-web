@@ -1135,7 +1135,11 @@ function renderDossier() {
       element("p", { class: "warning", text: "Destroyed worlds block fleet movement and edits; records are retained. Edits auto-save to this browser; export state to publish them." }),
     ]));
   }
-  $("dossier").replaceChildren(element("div", { class: "panel-heading" }, [element("h2", { text: "PLANETARY DOSSIER" }), element("span", { text: "◉ LINKED" })]), content);
+  const panel = $("dossier");
+  const keepScroll = panel.dataset.planet === planet.id ? panel.scrollTop : 0;
+  panel.replaceChildren(element("div", { class: "panel-heading" }, [element("h2", { text: "PLANETARY DOSSIER" }), element("span", { text: "◉ LINKED" })]), content);
+  panel.dataset.planet = planet.id;
+  panel.scrollTop = keepScroll;
 }
 
 // ---------- Pan / zoom / drag ----------
@@ -1754,7 +1758,7 @@ function setDrawer(open) {
   drawerOpen = open;
   document.body.classList.toggle("drawer-open", open);
   $("dossier-handle").setAttribute("aria-expanded", String(open));
-  $("dossier").inert = mobileQuery.matches && !open;
+  $("dossier").inert = false;
 }
 
 function setCommandDrawer(open) {
