@@ -303,8 +303,17 @@ h1, h2, h3 { margin: 0; font-weight: normal; letter-spacing: .12em; }
 .infra-empty { fill: none; stroke: var(--green); stroke-width: 1.2; stroke-dasharray: 2.5 2.5; opacity: .55; }
 .fleet-marker { cursor: pointer; }
 .fleet-marker .fleet-halo { fill: rgba(2, 10, 3, .72); stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 4; opacity: .7; }
-.ship .ship-hull { fill: #020a03; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; filter: url(#glow); }
-.ship .ship-detail { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.ship .ship-hull { fill: var(--ship-fill, #020a03); stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; filter: url(#glow); }
+.ship .ship-detail { fill: none; stroke: var(--ship-accent, currentColor); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.ship .ship-sigil { fill: var(--ship-accent); filter: drop-shadow(0 0 2px var(--ship-accent)); animation: sigil-pulse 1.8s ease-in-out infinite; }
+.ship .ship-smoke { fill: var(--ship-accent); opacity: 0; transform-box: fill-box; transform-origin: center; animation: plague-smoke 2.4s ease-out infinite; }
+.ship-death_guard .ship-detail { stroke: var(--ship-deep); }
+.ship-thousand_sons .ship-detail { filter: drop-shadow(0 0 1.5px var(--ship-accent)); }
+@keyframes sigil-pulse { 50% { opacity: .35; } }
+@keyframes plague-smoke {
+  0% { opacity: .85; transform: translate(0, 0) scale(.6); }
+  100% { opacity: 0; transform: translate(0, 5px) scale(2.4); }
+}
 .ship-icon .ship .ship-hull { filter: none; }
 .ship-icon { filter: drop-shadow(0 0 6px currentColor); justify-self: center; }
 .fleet-marker.draggable { cursor: grab; }
@@ -361,6 +370,10 @@ button.segment:hover { outline: 1px solid #fff; opacity: 1; }
 .fleet-text { display: flex; flex-direction: column; gap: 2px; }
 .fleet-name { font-size: 15px; color: var(--text); letter-spacing: .05em; }
 .fleet-faction { font-size: 11px; letter-spacing: .15em; }
+.fleet-class { font-size: 10px; letter-spacing: .16em; opacity: .8; }
+.fleet-card.faction-accented { box-shadow: inset 3px 0 0 var(--faction-accent), inset 0 0 18px -10px var(--faction-accent); background: linear-gradient(90deg, color-mix(in srgb, var(--faction-deep) 22%, transparent), transparent); }
+.fleet-card.faction-accented .fleet-class, .faction-crest { color: var(--faction-accent, currentColor); }
+.faction-crest { filter: drop-shadow(0 0 3px var(--faction-accent, transparent)); vertical-align: -3px; }
 .fleet-text small { font-size: 10px; opacity: .6; }
 .fleet-transfer { grid-column: 1 / -1; display: flex; gap: 6px; }
 .fleet-transfer select { flex: 1; }

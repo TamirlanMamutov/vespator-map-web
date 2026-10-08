@@ -12,6 +12,31 @@ const chaosStar = (() => {
   return [{ d: "M-3.5 0A3.5 3.5 0 1 0 3.5 0A3.5 3.5 0 1 0-3.5 0", mode: "stroke" }, { d: lines, mode: "stroke" }, { d: heads, mode: "fill" }];
 })();
 
+const ring = (cx, cy, r) => `M${cx - r} ${cy}A${r} ${r} 0 1 0 ${cx + r} ${cy}A${r} ${r} 0 1 0 ${cx - r} ${cy}`;
+
+// Thousand Sons: the Eye of Tzeentch inside a twelve-ray sunburst.
+const tzeentchEye = (() => {
+  let rays = "";
+  for (let i = 0; i < 12; i++) {
+    const angle = (i * Math.PI) / 6 + Math.PI / 12;
+    const outer = i % 2 ? 10.2 : 11.8;
+    rays += `M${(Math.cos(angle) * 8.6).toFixed(2)} ${(Math.sin(angle) * 8.6).toFixed(2)}L${(Math.cos(angle) * outer).toFixed(2)} ${(Math.sin(angle) * outer).toFixed(2)}`;
+  }
+  return [
+    { d: rays, mode: "stroke" },
+    { d: "M-7.4 0C-4.4-5 4.4-5 7.4 0C4.4 5-4.4 5-7.4 0Z", mode: "stroke" },
+    { d: ring(0, 0, 2.8), mode: "fill" },
+    { d: "M0-1.9V1.9", mode: "stroke", invert: true },
+  ];
+})();
+
+// Death Guard: the tripartite Nurgle trefoil, three rot-circles in an inverted triangle.
+const nurgleTrefoil = [
+  { d: `${ring(-4.5, -2.8, 4.7)}${ring(4.5, -2.8, 4.7)}${ring(0, 5, 4.7)}`, mode: "stroke" },
+  { d: `${ring(-4.5, -2.8, 1.5)}${ring(4.5, -2.8, 1.5)}${ring(0, 5, 1.5)}`, mode: "fill" },
+  { d: ring(0, -0.2, 1.1), mode: "fill" },
+];
+
 export const EMBLEMS = {
   aquila: { label: "Aquila", layers: [
     { d: "M-1.6-1L-11-6.5-9.3-2.4-11.2-.6-8.4.6-9.6 3.6-3.4 2.4ZM1.6-1L11-6.5 9.3-2.4 11.2-.6 8.4.6 9.6 3.6 3.4 2.4Z", mode: "fill" },
@@ -34,6 +59,8 @@ export const EMBLEMS = {
     { d: "M-1.8-9.4A1.8 1.8 0 1 0 1.8-9.4A1.8 1.8 0 1 0-1.8-9.4", mode: "fill" },
   ] },
   chaosStar: { label: "Chaos Star", layers: chaosStar },
+  tzeentchEye: { label: "Eye of Tzeentch", layers: tzeentchEye },
+  nurgleTrefoil: { label: "Nurgle Trefoil", layers: nurgleTrefoil },
   nurgleFly: { label: "Nurgle Fly", layers: [
     { d: "M0-4C3.4-4 3.4 7.6 0 9.6-3.4 7.6-3.4-4 0-4Z", mode: "fill" },
     { d: "M-2.6-6.6A2.6 2.6 0 1 0 2.6-6.6A2.6 2.6 0 1 0-2.6-6.6", mode: "fill" },
@@ -156,6 +183,19 @@ export const SHIP_SILHOUETTES = {
     [0, -12], [1.6, -7], [6.8, -10], [4.6, -3.6], [11, -2.4], [5, 1], [9, 6.4], [3.8, 4.8], [3.2, 10.4], [1, 7.4], [0, 11],
     [-1, 7.4], [-3.2, 10.4], [-3.8, 4.8], [-9, 6.4], [-5, 1], [-11, -2.4], [-4.6, -3.6], [-6.8, -10], [-1.6, -7],
   ], detail: "M0-7V5M-2.6-1.4L0 1 2.6-1.4" },
+  // Faction hulls: "sigils" mark glowing sorcerous spire tips, "exhaust" marks plague chimney mouths.
+  thousand_sons: { label: "Khopesh Sorcery Cruiser", faction: "Thousand Sons", hull: [
+    [-2.6, -12], [0.6, -11.2], [2, -9.4], [1.6, -7.4], [2.4, -6], [3, -2], [9.6, -5.6], [11.4, -4.6], [6, 0.8], [3.4, 2],
+    [3.6, 6.4], [5.6, 9.4], [2.2, 7.6], [1.2, 11.4], [0, 8.6], [-1.2, 11.4], [-2.2, 7.6], [-5.6, 9.4], [-3.6, 6.4], [-3.4, 2],
+    [-6, 0.8], [-11.4, -4.6], [-9.6, -5.6], [-3, -2], [-2.4, -6], [-1.2, -7.2], [-2.2, -8.6], [-3.4, -10.4],
+  ], detail: "M0-5.6V6M-1.8 5.4C-1.8 2.2-.8 0 0-2.4.8 0 1.8 2.2 1.8 5.4M3.8-1.6L9.8-4.6M-3.8-1.6L-9.8-4.6M-1.6-9.6C-.4-9.2.6-8.4 1-7.2",
+  sigils: [[5.6, 9.4], [1.2, 11.4], [-1.2, 11.4], [-5.6, 9.4], [0, -2.4]] },
+  death_guard: { label: "Terminus Plague Ram-Barge", faction: "Death Guard", hull: [
+    [-3.2, -12], [3.2, -12], [4.8, -10.4], [5.6, -8], [8.8, -11], [6.8, -5.8], [7.8, -4.4], [10, -4.4], [10, -1], [8.4, -1],
+    [8.6, 3.2], [10.6, 4.6], [8.2, 5.8], [7, 8.6], [4.4, 10.6], [3.4, 11.4], [-3.4, 11.4], [-4.4, 10.6], [-7, 8.6], [-8.4, 4.6],
+    [-10.6, 3.4], [-8.6, 2.2], [-8.6, -1.6], [-10.2, -1.6], [-10.2, -4.6], [-7.8, -4.6], [-6.6, -6.8], [-9.4, -8.6], [-5.6, -8.8], [-4.8, -10.4],
+  ], detail: "M-3.6-9.6H3.6M-5.6-5.4H5.6M0-5.4V8.6M-5.4 2.6H5.4M-3 8.6H3M8.2-2.7A.9.9 0 1 0 10 -2.7A.9.9 0 1 0 8.2-2.7M-10.3-3.1A.9.9 0 1 0-8.5-3.1A.9.9 0 1 0-10.3-3.1",
+  exhaust: [[9.1, -2.7], [-9.4, -3.1]] },
   necron: { label: "Crescent Scythe Raider", hull: [
     ...Array.from({ length: 9 }, (_, i) => { const a = (10 + i * 20) * Math.PI / 180; return [+(Math.cos(a) * 11).toFixed(2), +(Math.sin(a) * 11 - 3).toFixed(2)]; }),
     [-11.4, -10],
@@ -176,7 +216,17 @@ export const SHIP_BADGES = {
   aeldari_cruiser: { ship: "aeldari", label: "Aeldari Cruiser" },
 };
 
-const FACTION_SHIPS = { "Imperial Guard": "imperium", "Imperial Knights": "imperium", "Thousand Sons": "chaos", "Death Guard": "chaos", Necrons: "necron", Aeldari: "aeldari" };
+const FACTION_SHIPS = { "Imperial Guard": "imperium", "Imperial Knights": "imperium", "Thousand Sons": "thousand_sons", "Death Guard": "death_guard", Necrons: "necron", Aeldari: "aeldari" };
+
+// Faction theme accents layered over the alliance colour (hull outline stays alliance-coloured for readability).
+export const FACTION_ACCENTS = {
+  "Thousand Sons": { accent: "#00FFFF", deep: "#1F4FD8", hull: "#071640", effect: "sorcery" },
+  "Death Guard": { accent: "#7F9C3E", deep: "#8C5A2B", hull: "#1E1A0A", effect: "smoke" },
+};
+
+export function factionAccent(faction) {
+  return FACTION_ACCENTS[faction] || null;
+}
 const ALLIANCE_SHIPS = { Imperium: "imperium", Xenos: "necron", Chaos: "chaos" };
 
 export function shipKey(fleet) {
@@ -188,7 +238,9 @@ export function shipScale(fleet) {
 }
 
 export function shipClass(fleet) {
-  return SHIP_BADGES[fleet.badge]?.label || SHIP_SILHOUETTES[shipKey(fleet)].label;
+  const ship = SHIP_SILHOUETTES[shipKey(fleet)];
+  if (ship.faction) return ship.label;
+  return SHIP_BADGES[fleet.badge]?.label || ship.label;
 }
 
 export function shipPath(key) {
@@ -208,8 +260,8 @@ export const FACTION_EMBLEMS = {
   "Imperial Knights": "knightCrest",
   Necrons: "necronAnkh",
   Aeldari: "aeldariRune",
-  "Thousand Sons": "chaosStar",
-  "Death Guard": "nurgleFly",
+  "Thousand Sons": "tzeentchEye",
+  "Death Guard": "nurgleTrefoil",
 };
 
 export const ALLIANCE_EMBLEMS = { Imperium: "aquila", Xenos: "necronAnkh", Chaos: "chaosStar" };
@@ -232,6 +284,10 @@ export const BADGE_EMBLEMS = {
   craftworld_rune: "aeldariRune",
   chaos_star: "chaosStar",
   nurgle_fly: "nurgleFly",
+  thousand_sons: "tzeentchEye",
+  death_guard: "nurgleTrefoil",
+  tzeentch_eye: "tzeentchEye",
+  nurgle_trefoil: "nurgleTrefoil",
   imperial_cruiser: "aquila",
   imperial_battleship: "aquila",
   chaos_grand_cruiser: "chaosStar",

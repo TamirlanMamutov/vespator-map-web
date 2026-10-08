@@ -9,7 +9,7 @@ import {
 } from "./campaign.js";
 import {
   EMBLEMS, TERRAIN_GLYPHS, SHIP_SILHOUETTES, ALLIANCE_EMBLEMS, INFRASTRUCTURE_EMBLEMS,
-  factionEmblem, fleetEmblem, glyphKey, emblemLayers, shipKey, shipScale, shipClass, shipPath,
+  factionEmblem, fleetEmblem, glyphKey, emblemLayers, shipKey, shipScale, shipClass, shipPath, factionAccent,
 } from "./emblems.js";
 import { terrainTheme } from "./terrain.js";
 import { settings } from "./config.js";
@@ -136,8 +136,18 @@ function shipIcon(fleet, size) {
 
 function shipGlyph(fleet, rotation = 0) {
   const kind = shipKey(fleet);
-  const group = vector("g", { class: `ship ship-${kind}`, "data-ship": kind, transform: `rotate(${rotation.toFixed(1)}) scale(${shipScale(fleet)})` });
-  group.append(vector("path", { d: shipPath(kind), class: "ship-hull" }), vector("path", { d: SHIP_SILHOUETTES[kind].detail, class: "ship-detail" }));
+  const ship = SHIP_SILHOUETTES[kind];
+  const accent = factionAccent(fleet.faction);
+  const attributes = { class: `ship ship-${kind}`, "data-ship": kind, transform: `rotate(${rotation.toFixed(1)}) scale(${shipScale(fleet)})` };
+  if (accent) attributes.style = `--ship-accent:${accent.accent};--ship-deep:${accent.deep};--ship-fill:${accent.hull}`;
+  const group = vector("g", attributes);
+  group.append(vector("path", { d: shipPath(kind), class: "ship-hull" }), vector("path", { d: ship.detail, class: "ship-detail" }));
+  for (const [x, y] of ship.sigils || []) group.append(vector("circle", { cx: x, cy: y, r: 1.1, class: "ship-sigil" }));
+  (ship.exhaust || []).forEach(([x, y], stack) => {
+    for (let puff = 0; puff < 3; puff++) {
+      group.append(vector("circle", { cx: x, cy: y, r: 1.6, class: "ship-smoke", style: `animation-delay:${(-(puff * 0.8 + stack * 0.4)).toFixed(1)}s` }));
+    }
+  });
   return group;
 }
 
@@ -358,8 +368,8 @@ function renderLegend() {
     emblemIcon(ALLIANCE_EMBLEMS[alliance], 26, "legend-symbol"),
     element("div", {}, [
       element("strong", { text: `${alliance.toUpperCase()} · ${color(alliance).toUpperCase()}` }),
-      ...campaign.alliances[alliance].factions.map((faction) => element("small", { class: "legend-faction" }, [
-        emblemIcon(factionEmblem(faction, alliance), 14), document.createTextNode(` ${faction} — ${EMBLEMS[factionEmblem(faction, alliance)].label}`),
+      ...campaign.alliances[alliance].factions.map((faction) => element("small", { class: "legend-faction", style: factionAccent(faction) ? `--faction-accent:${factionAccent(faction).accent}` : null }, [
+        emblemIcon(factionEmblem(faction, alliance), 14, "emblem-icon faction-crest"), document.createTextNode(` ${faction} — ${EMBLEMS[factionEmblem(faction, alliance)].label}`),
       ])),
     ]),
   ])));
@@ -934,11 +944,13 @@ function fleetSection(planet) {
   const targets = neighbors(campaign, planet.id).filter((id) => canTransfer(campaign, planet.id, id)).map((id) => planetById(campaign, id));
   planet.fleets.forEach((fleet, index) => {
     const title = fleetTitle(fleet);
-    const card = element("div", { class: "fleet-card", style: allianceStyle(fleet.alliance), "data-ship": shipKey(fleet) }, [
+    const accent = factionAccent(fleet.faction);
+    const card = element("div", { class: `fleet-card${accent ? " faction-accented" : ""}`, style: `${allianceStyle(fleet.alliance)}${accent ? `;--faction-accent:${accent.accent};--faction-deep:${accent.deep}` : ""}`, "data-ship": shipKey(fleet) }, [
       shipIcon(fleet, 38),
       element("div", { class: "fleet-text" }, [
         element("strong", { class: "fleet-name", text: title }),
-        element("span", { class: "fleet-faction" }, [emblemIcon(fleetEmblem(fleet), 13), document.createTextNode(` ${fleet.faction.toUpperCase()} · ${shipClass(fleet).toUpperCase()}`)]),
+        element("span", { class: "fleet-faction" }, [emblemIcon(fleetEmblem(fleet), 15, "emblem-icon faction-crest"), document.createTextNode(` ${fleet.faction.toUpperCase()} · ${EMBLEMS[fleetEmblem(fleet)].label.toUpperCase()}`)]),
+        element("span", { class: "fleet-class", text: `CLASS: ${shipClass(fleet).toUpperCase()}` }),
         element("span", { class: "alliance-pill", style: allianceStyle(fleet.alliance) }, [emblemIcon(ALLIANCE_EMBLEMS[fleet.alliance], 12), document.createTextNode(` ${fleet.alliance.toUpperCase()}`)]),
         element("small", { text: planet.destroyed ? "STRANDED / WORLD DESTROYED" : "IN ORBIT / AWAITING ORDERS" }),
       ]),

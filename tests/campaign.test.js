@@ -12,7 +12,7 @@ import {
 } from "../campaign.js";
 import {
   EMBLEMS, TERRAIN_GLYPHS, BADGE_EMBLEMS, ALLIANCE_EMBLEMS, INFRASTRUCTURE_EMBLEMS, FACTION_EMBLEMS,
-  SHIP_SILHOUETTES, SHIP_BADGES, factionEmblem, fleetEmblem, glyphKey, emblemLayers, shipKey, shipScale, shipClass, shipPath,
+  SHIP_SILHOUETTES, SHIP_BADGES, factionEmblem, fleetEmblem, glyphKey, emblemLayers, shipKey, shipScale, shipClass, shipPath, factionAccent,
 } from "../emblems.js";
 import { terrainTheme, TERRAIN_THEMES, seededRandom } from "../terrain.js";
 
@@ -200,7 +200,7 @@ test("fleets carry ship badges with canonical silhouettes and faction emblems", 
   const fleets = data.planets.flatMap((planet) => planet.fleets);
   assert.equal(fleets.length, 5);
   const kinds = Object.fromEntries(fleets.map((fleet) => [fleet.faction, shipKey(fleet)]));
-  assert.deepEqual(kinds, { Necrons: "necron", Aeldari: "aeldari", "Thousand Sons": "chaos", "Imperial Knights": "imperium", "Imperial Guard": "imperium" });
+  assert.deepEqual(kinds, { Necrons: "necron", Aeldari: "aeldari", "Thousand Sons": "thousand_sons", "Imperial Knights": "imperium", "Imperial Guard": "imperium" });
   for (const fleet of fleets) {
     assert.ok(SHIP_BADGES[fleet.badge], fleet.badge);
     assert.ok(EMBLEMS[fleetEmblem(fleet)], fleet.faction);
@@ -208,7 +208,8 @@ test("fleets carry ship badges with canonical silhouettes and faction emblems", 
     assert.equal(fleetTitle(fleet), `${fleet.faction} Battlegroup`);
     assert.ok(shipClass(fleet).length);
   }
-  assert.equal(shipKey({ faction: "Death Guard", alliance: "Chaos" }), "chaos");
+  assert.equal(shipKey({ faction: "Death Guard", alliance: "Chaos" }), "death_guard");
+  assert.equal(shipKey({ faction: "Unknown Renegades", alliance: "Chaos" }), "chaos");
   assert.equal(shipKey({ faction: "Unknown", alliance: "Xenos", badge: "aeldari_cruiser" }), "aeldari");
   assert.equal(shipScale({ badge: "imperial_battleship" }), 1.2);
   assert.equal(shipScale({ badge: "unknown" }), 1);
@@ -218,8 +219,23 @@ test("fleets carry ship badges with canonical silhouettes and faction emblems", 
     assert.ok(ship.hull.every(([x, y]) => Math.abs(x) <= 12 && Math.abs(y) <= 12), `${key} fits the 24-unit box`);
     assert.match(shipPath(key), /^M[-\d.]+ [-\d.]+(L[-\d.]+ [-\d.]+)+Z$/);
   }
-  assert.equal(new Set(Object.values(SHIP_SILHOUETTES).map((ship) => shipPath(Object.keys(SHIP_SILHOUETTES).find((k) => SHIP_SILHOUETTES[k] === ship)))).size, 4);
+  assert.equal(new Set(Object.values(SHIP_SILHOUETTES).map((ship) => shipPath(Object.keys(SHIP_SILHOUETTES).find((k) => SHIP_SILHOUETTES[k] === ship)))).size, 6);
   assert.equal(fleetTitle({ faction: "Necrons", name: "Szarekhan Dynasty" }), "Szarekhan Dynasty");
+});
+
+test("Thousand Sons and Death Guard carry distinct hulls, crests and accents", () => {
+  const sons = { faction: "Thousand Sons", alliance: "Chaos", badge: "chaos_grand_cruiser" };
+  const guard = { faction: "Death Guard", alliance: "Chaos", badge: "chaos_grand_cruiser" };
+  assert.notEqual(shipPath(shipKey(sons)), shipPath(shipKey(guard)));
+  assert.equal(fleetEmblem(sons), "tzeentchEye");
+  assert.equal(fleetEmblem(guard), "nurgleTrefoil");
+  assert.equal(shipClass(sons), "Khopesh Sorcery Cruiser");
+  assert.equal(shipClass(guard), "Terminus Plague Ram-Barge");
+  assert.equal(factionAccent("Thousand Sons").accent, "#00FFFF");
+  assert.equal(factionAccent("Death Guard").accent, "#7F9C3E");
+  assert.equal(factionAccent("Necrons"), null);
+  assert.ok(SHIP_SILHOUETTES.thousand_sons.sigils.length && SHIP_SILHOUETTES.death_guard.exhaust.length);
+  for (const key of ["tzeentchEye", "nurgleTrefoil"]) assert.ok(EMBLEMS[key].layers.every((layer) => /^M[-\d.]/.test(layer.d) && !/NaN|undefined/.test(layer.d)), key);
 });
 
 test("world coordinates keep the outer perimeter and never overlap", () => {

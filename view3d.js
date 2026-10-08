@@ -1,7 +1,7 @@
 import * as THREE from "./vendor/three.module.js";
 import { ALLIANCES, MAX_POWER, dominantAlliance, planetNames, activeVectors, isOrbitalStrike, activeKillTeams } from "./campaign.js";
 import { terrainTheme, seededRandom } from "./terrain.js";
-import { ALLIANCE_EMBLEMS, SHIP_SILHOUETTES, drawEmblem, fleetEmblem, shipKey, shipScale } from "./emblems.js";
+import { ALLIANCE_EMBLEMS, SHIP_SILHOUETTES, drawEmblem, fleetEmblem, shipKey, shipScale, factionAccent } from "./emblems.js";
 
 const PLANET_RADIUS = 26;
 const PHOSPHOR = 0x33ff33;
@@ -321,6 +321,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
   let pulses = [];
   let throbs = [];
   let smokes = [];
+  let plumes = [];
   let selectable = [];
   let debrisById = new Map();
   let planetById = new Map();
@@ -405,9 +406,11 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     }));
   }
 
-  function emblemTexture(emblem, alliance) {
+  // The hexagon frame keeps the alliance colour; faction crests (Tzeentch, Nurgle) take their own accent ink.
+  function emblemTexture(emblem, alliance, ink) {
     const hex = data.alliances[alliance].color;
-    return cached(`emblem:${emblem}:${hex}`, () => canvasTexture(96, 96, (c) => {
+    const crest = ink || hex;
+    return cached(`emblem:${emblem}:${hex}:${crest}`, () => canvasTexture(96, 96, (c) => {
       c.fillStyle = "rgba(2,10,3,.85)";
       c.beginPath();
       for (let i = 0; i < 6; i++) c.lineTo(48 + Math.cos(Math.PI / 6 + i * Math.PI / 3) * 44, 48 + Math.sin(Math.PI / 6 + i * Math.PI / 3) * 44);
@@ -416,7 +419,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
       c.strokeStyle = hex;
       c.lineWidth = 4;
       c.stroke();
-      drawEmblem(c, emblem, 48, 48, 56, hex, 2);
+      drawEmblem(c, emblem, 48, 48, 56, crest, 2);
     }));
   }
 
@@ -725,6 +728,45 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     return shipGeometries.get(kind);
   }
 
+  // Silhouette (x, y) maps to ship-local (x, top, -y) after shipGeometry's rotation.
+  function addFactionEffects(ship, kind, scale, accent, seed) {
+    if (!accent) return;
+    const silhouette = SHIP_SILHOUETTES[kind];
+    const top = 2.2 * scale;
+    (silhouette.sigils || []).forEach(([x, y], index) => {
+      const sigil = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: accent.accent, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      sigil.position.set(x * scale, top, -y * scale);
+      sigil.scale.setScalar(4.5);
+      ship.add(sigil);
+      throbs.push({ material: sigil.material, base: 0.7, amp: 0.3, speed: 5, phase: index * 1.3 });
+    });
+    if (silhouette.sigils) {
+      const aura = new THREE.Mesh(new THREE.TorusGeometry(9 * scale, 0.35, 6, 40), new THREE.MeshBasicMaterial({ color: accent.accent, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }));
+      aura.rotation.x = Math.PI / 2;
+      ship.add(aura);
+      spinners.push({ object: aura, axis: "z", speed: 1.4 });
+      throbs.push({ material: aura.material, base: 0.3, amp: 0.2, speed: 2.6 });
+    }
+    const rand = seededRandom(`${seed}-plume`);
+    (silhouette.exhaust || []).forEach(([x, y]) => {
+      const origin = new THREE.Vector3(x * scale, top, -y * scale);
+      for (let puff = 0; puff < 5; puff++) {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: accent.accent, transparent: true, depthWrite: false }));
+        ship.add(sprite);
+        const plume = { sprite, origin, t: puff / 5, drift: new THREE.Vector3((rand() - 0.5) * 3, 7 + rand() * 4, -6 - rand() * 4) };
+        plumes.push(plume);
+        stepPlume(plume, 0);
+      }
+    });
+  }
+
+  function stepPlume(plume, delta) {
+    plume.t = (plume.t + delta * 0.55) % 1;
+    plume.sprite.position.copy(plume.origin).addScaledVector(plume.drift, plume.t);
+    plume.sprite.scale.setScalar(2.5 + plume.t * 8);
+    plume.sprite.material.opacity = (1 - plume.t) * 0.75;
+  }
+
   function addFleets(planet) {
     const center = world(planet);
     planet.fleets.forEach((fleet, index) => {
@@ -734,21 +776,24 @@ export function createCogitatorView(container, initialData, initialSelection, { 
       const key = `${planet.id}:${index}:${fleet.faction}:${fleet.badge || ""}:${fleet.name || ""}`;
       const radius = PLANET_RADIUS + 22 + index * 11;
       const tilt = (index % 2 ? -1 : 1) * (0.25 + index * 0.12);
+      const accent = factionAccent(fleet.faction);
       const ship = new THREE.Group();
       ship.userData.ship = kind;
-      const hull = new THREE.Mesh(shipGeometry(kind), new THREE.MeshLambertMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.35, flatShading: true }));
+      const hullColor = accent ? new THREE.Color(hex).lerp(new THREE.Color(accent.deep), 0.65) : hex;
+      const hull = new THREE.Mesh(shipGeometry(kind), new THREE.MeshLambertMaterial({ color: hullColor, emissive: accent ? accent.deep : hex, emissiveIntensity: 0.35, flatShading: true }));
       hull.scale.setScalar(0.85 * shipScale(fleet));
       hull.userData.planetId = planet.id;
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(hull.geometry, 30), new THREE.LineBasicMaterial({ color: 0xeaffea, transparent: true, opacity: 0.6 }));
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(hull.geometry, 30), new THREE.LineBasicMaterial({ color: accent ? accent.accent : 0xeaffea, transparent: true, opacity: accent ? 0.85 : 0.6 }));
       edges.scale.copy(hull.scale);
-      const engine = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: hex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const engine = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: accent ? accent.accent : hex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
       engine.position.set(0, 0, -10 * hull.scale.x);
       engine.scale.setScalar(10);
-      const insignia = new THREE.Sprite(new THREE.SpriteMaterial({ map: emblemTexture(emblem, fleet.alliance), transparent: true, depthWrite: false }));
+      const insignia = new THREE.Sprite(new THREE.SpriteMaterial({ map: emblemTexture(emblem, fleet.alliance, accent?.accent), transparent: true, depthWrite: false }));
       insignia.position.set(0, 13, 0);
       insignia.scale.setScalar(15);
       insignia.userData.planetId = planet.id;
       ship.add(hull, edges, engine, insignia);
+      addFactionEffects(ship, kind, hull.scale.x, accent, `${key}`);
       fleetGroup.add(ship);
       selectable.push(hull, insignia);
       const path = new THREE.EllipseCurve(0, 0, radius, radius, 0, Math.PI * 2).getPoints(80).map((p) => new THREE.Vector3(p.x, 0, p.y).applyAxisAngle(new THREE.Vector3(1, 0, 0), tilt).add(center));
@@ -1142,6 +1187,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     pulses = [];
     throbs = [];
     smokes = [];
+    plumes = [];
     selectable = [];
     debrisById = new Map();
     planetById = new Map();
@@ -1294,6 +1340,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
       }
       for (const throb of throbs) throb.material[throb.property || "opacity"] = throb.base + Math.sin(elapsed * throb.speed + (throb.phase || 0)) * throb.amp;
       for (const smoke of smokes) stepSmoke(smoke, delta);
+      for (const plume of plumes) stepPlume(plume, delta);
       if (showVectors) for (const projectile of projectiles) stepProjectile(projectile, delta);
     }
     for (const [id, progress] of spawns) {
