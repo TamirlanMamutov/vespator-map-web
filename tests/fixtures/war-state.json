@@ -1,0 +1,269 @@
+{
+  "_comment": "Pinned war state for behaviour tests. Live campaign_data.json values change with every War Council publish.",
+  "planets": {
+    "sidon": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 3,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "active",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "knossos": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 3,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 4,
+        "slots": [
+          "empty",
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "myrkvidr": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 2,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "niflegard": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 4,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 2,
+        "slots": [
+          "active",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "harvest": {
+      "powerLevels": {
+        "Imperium": 2,
+        "Xenos": 3,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "active",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "sarif_iv": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 3,
+        "Chaos": 2
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "active",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [
+        {
+          "alliance": "Xenos",
+          "faction": "Necrons",
+          "badge": "necron_scythe"
+        },
+        {
+          "alliance": "Xenos",
+          "faction": "Aeldari",
+          "badge": "aeldari_cruiser"
+        }
+      ],
+      "destroyed": false
+    },
+    "pluto_ii": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 1,
+        "Chaos": 4
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "active",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [
+        {
+          "alliance": "Chaos",
+          "faction": "Thousand Sons",
+          "badge": "chaos_grand_cruiser"
+        }
+      ],
+      "destroyed": false
+    },
+    "amazon_xi": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 3,
+        "Chaos": 2
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "nickel": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 4,
+        "Chaos": 2
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "atacama": {
+      "powerLevels": {
+        "Imperium": 2,
+        "Xenos": 3,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "active",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "baikonur": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 3,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 2,
+        "slots": [
+          "active",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "aetna": {
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 2,
+        "Chaos": 2
+      },
+      "infrastructure": {
+        "maxSlots": 4,
+        "slots": [
+          "active",
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
+      "fleets": [],
+      "destroyed": false
+    },
+    "gj_3378b": {
+      "powerLevels": {
+        "Imperium": 4,
+        "Xenos": 3,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "active",
+          "active",
+          "active"
+        ]
+      },
+      "fleets": [
+        {
+          "alliance": "Imperium",
+          "faction": "Imperial Knights",
+          "badge": "imperial_cruiser"
+        },
+        {
+          "alliance": "Imperium",
+          "faction": "Imperial Guard",
+          "badge": "imperial_battleship"
+        }
+      ],
+      "destroyed": false
+    }
+  },
+  "offensiveVectors": [
+    {
+      "from": "gj_3378b",
+      "to": "harvest",
+      "alliance": "Imperium",
+      "label": "Crusade Spearhead"
+    },
+    {
+      "from": "pluto_ii",
+      "to": "pluto_ii",
+      "alliance": "Chaos",
+      "label": "Orbital Bombardment"
+    }
+  ],
+  "activeKillTeams": []
+}

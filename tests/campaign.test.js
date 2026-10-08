@@ -17,7 +17,24 @@ import {
 import { terrainTheme, TERRAIN_THEMES, seededRandom } from "../terrain.js";
 
 const source = readFileSync(new URL("../campaign_data.json", import.meta.url), "utf8");
-const fresh = () => JSON.parse(source);
+const WAR_STATE = JSON.parse(readFileSync(new URL("./fixtures/war-state.json", import.meta.url), "utf8"));
+// The live file as last published by the War Council. Only static sector facts (worlds, lanes,
+// terrain, coordinates) may be pinned against it; volatile war state gets schema checks only.
+const live = () => JSON.parse(source);
+// Behaviour tests run on the live sector with a pinned war state (power, slots, fleets, assaults,
+// kill teams, Exterminatus), so Warmaster publishes can never cause false CI failures.
+const fresh = () => {
+  const data = live();
+  for (const planet of data.planets) {
+    const state = WAR_STATE.planets[planet.id];
+    assert.ok(state, `tests/fixtures/war-state.json is missing ${planet.id}`);
+    Object.assign(planet, structuredClone(state));
+  }
+  data.offensiveVectors = structuredClone(WAR_STATE.offensiveVectors);
+  data.activeKillTeams = structuredClone(WAR_STATE.activeKillTeams);
+  return data;
+};
+const vectorKey = ({ from, to, alliance }) => `${from}>${to}:${alliance}`;
 const laneKey = ([a, b]) => [a, b].sort().join("|");
 const OFFICIAL_TWISTS = [
   "Spaceport", "Desolate Wastes", "Xenoflora Jungle", "Rad Zone", "Forge Complex",
@@ -103,10 +120,24 @@ test("invented terrain is rejected and legacy terrain fields migrate", () => {
 test("offensive vectors load from the data, including the orbital strike", () => {
   const data = fresh();
   normalizeCampaign(data);
-  assert.deepEqual(data.offensiveVectors.map(({ from, to, alliance }) => `${from}>${to}:${alliance}`), ["gj_3378b>harvest:Imperium", "pluto_ii>pluto_ii:Chaos"]);
+  assert.deepEqual(data.offensiveVectors.map(vectorKey), ["gj_3378b>harvest:Imperium", "pluto_ii>pluto_ii:Chaos"]);
   assert.deepEqual(data.offensiveVectors.map(isOrbitalStrike), [false, true]);
   assert.equal(activeVectors(data).length, 2);
   assert.equal(assaultTitle(data, data.offensiveVectors[1]), "Orbital Bombardment");
+  // Whatever the War Council last published must load and parse the same way.
+  const published = live();
+  normalizeCampaign(published);
+  assert.ok(Array.isArray(published.offensiveVectors));
+  const ids = new Set(published.planets.map((planet) => planet.id));
+  for (const vector of published.offensiveVectors) {
+    const key = vectorKey(vector);
+    assert.match(key, /^[a-z0-9_]+>[a-z0-9_]+:(Imperium|Xenos|Chaos)$/, key);
+    assert.ok(ids.has(vector.from) && ids.has(vector.to), key);
+    assert.equal(isOrbitalStrike(vector), vector.from === vector.to, key);
+    assert.ok(vector.from === vector.to || neighbors(published, vector.from).includes(vector.to), `${key} follows a warp lane`);
+    assert.ok(assaultTitle(published, vector).length, key);
+  }
+  assert.equal(new Set(published.offensiveVectors.map(vectorKey)).size, published.offensiveVectors.length);
   const bare = fresh();
   delete bare.offensiveVectors;
   normalizeCampaign(bare);
@@ -251,16 +282,27 @@ test("world coordinates keep the outer perimeter and never overlap", () => {
   assert.ok(at("gj_3378b").y > at("atacama").y && at("gj_3378b").x > at("harvest").x);
 });
 
-test("power matrices are complete and within the 1-4 Crusade range", () => {
-  // Exact values are live War Council state (Cloud Uplink publishes change them), so only the shape is pinned here.
-  const data = fresh();
+test("live War Council state is well-formed (power, slots, fleets, kill teams)", () => {
+  // Exact values change with every Cloud Uplink publish, so only the schema is pinned here.
+  const data = live();
+  normalizeCampaign(data);
+  assert.doesNotThrow(() => validateCampaign(structuredClone(data)));
   for (const planet of data.planets) {
     assert.deepEqual(Object.keys(planet.powerLevels).sort(), [...ALLIANCES].sort(), planet.id);
     for (const alliance of ALLIANCES) {
       const level = planet.powerLevels[alliance];
       assert.ok(Number.isInteger(level) && level >= 1 && level <= 4, `${planet.id} ${alliance}=${level}`);
     }
+    assert.ok(planet.infrastructure.slots.length <= planet.infrastructure.maxSlots, planet.id);
+    assert.ok(planet.infrastructure.maxSlots <= MAX_INFRASTRUCTURE, planet.id);
+    assert.ok(occupiedSlots(planet) <= planet.infrastructure.slots.length, planet.id);
+    for (const fleet of planet.fleets) {
+      assert.ok(ALLIANCES.includes(fleet.alliance) && data.alliances[fleet.alliance].factions.includes(fleet.faction), `${planet.id} ${fleet.faction}`);
+      assert.ok(EMBLEMS[fleetEmblem(fleet)] && shipPath(shipKey(fleet)) && fleetTitle(fleet).length, `${planet.id} ${fleet.faction}`);
+    }
   }
+  assert.ok(Array.isArray(data.activeKillTeams));
+  for (const operation of data.activeKillTeams) assert.ok(killTeamTitle(data, operation).length, operation.id);
 });
 
 test("warp-lane network is fully connected", () => {
