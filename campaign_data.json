@@ -206,7 +206,10 @@
       "infrastructure": {
         "maxSlots": 3,
         "slots": [
-          "empty",
+          {
+            "type": "Fortification Line",
+            "alliance": "Xenos"
+          },
           "empty",
           "empty"
         ]
