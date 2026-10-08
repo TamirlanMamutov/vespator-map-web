@@ -609,12 +609,6 @@
   "offensiveVectors": [
     {
       "from": "harvest",
-      "to": "harvest",
-      "alliance": "Xenos",
-      "label": "Purge and Burn: Chaos"
-    },
-    {
-      "from": "harvest",
       "to": "gj_3378b",
       "alliance": "Imperium",
       "label": "Sieze Power Base: Chaos"
@@ -624,6 +618,12 @@
       "to": "atacama",
       "alliance": "Imperium",
       "label": "Sieze Power Base: Chaos"
+    },
+    {
+      "from": "harvest",
+      "to": "sarif_iv",
+      "alliance": "Xenos",
+      "label": "Purge and Burn: Chaos"
     }
   ],
   "activeKillTeams": []
