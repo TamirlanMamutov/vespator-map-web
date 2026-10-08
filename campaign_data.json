@@ -1,21 +1,59 @@
 {
   "campaignName": "The Vespator Front",
   "alliances": {
-    "Imperium": { "color": "#E5A93C", "factions": ["Imperial Guard", "Imperial Knights"] },
-    "Xenos": { "color": "#33FF33", "factions": ["Necrons", "Aeldari"] },
-    "Chaos": { "color": "#FF3333", "factions": ["Thousand Sons", "Death Guard"] }
+    "Imperium": {
+      "color": "#E5A93C",
+      "factions": [
+        "Imperial Guard",
+        "Imperial Knights"
+      ]
+    },
+    "Xenos": {
+      "color": "#33FF33",
+      "factions": [
+        "Necrons",
+        "Aeldari"
+      ]
+    },
+    "Chaos": {
+      "color": "#FF3333",
+      "factions": [
+        "Thousand Sons",
+        "Death Guard"
+      ]
+    }
   },
   "planets": [
     {
       "id": "sidon",
       "name": "Sidon",
       "subName": "Sagette",
-      "x": 150, "y": 200,
-      "powerLevels": { "Imperium": 1, "Xenos": 3, "Chaos": 1 },
-      "infrastructure": { "maxSlots": 3, "slots": ["active", "empty", "empty"] },
+      "x": 150,
+      "y": 200,
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 2,
+        "Chaos": 2
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Rad Zone & Desolate Wastes",
-      "terrainTwists": ["Rad Zone", "Delvesite Facility", "Desolate Wastes"],
-      "terrainIcons": ["rad_zone", "delvesite_facility", "desolate_wastes"],
+      "terrainTwists": [
+        "Rad Zone",
+        "Delvesite Facility",
+        "Desolate Wastes"
+      ],
+      "terrainIcons": [
+        "rad_zone",
+        "delvesite_facility",
+        "desolate_wastes"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -23,12 +61,31 @@
       "id": "knossos",
       "name": "Knossos",
       "subName": "Minos",
-      "x": 120, "y": 580,
-      "powerLevels": { "Imperium": 1, "Xenos": 3, "Chaos": 1 },
-      "infrastructure": { "maxSlots": 4, "slots": ["empty", "empty", "empty", "empty"] },
+      "x": 120,
+      "y": 580,
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 3,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 4,
+        "slots": [
+          "empty",
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Forge Complex & Hab Sprawl",
-      "terrainTwists": ["Forge Complex", "Hab Sprawl"],
-      "terrainIcons": ["forge_complex", "hab_sprawl"],
+      "terrainTwists": [
+        "Forge Complex",
+        "Hab Sprawl"
+      ],
+      "terrainIcons": [
+        "forge_complex",
+        "hab_sprawl"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -36,12 +93,30 @@
       "id": "myrkvidr",
       "name": "Myrkviðr",
       "subName": "Schwarzwald",
-      "x": 200, "y": 860,
-      "powerLevels": { "Imperium": 1, "Xenos": 2, "Chaos": 1 },
-      "infrastructure": { "maxSlots": 3, "slots": ["empty", "empty", "empty"] },
+      "x": 200,
+      "y": 860,
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 2,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Xenoflora Jungle",
-      "terrainTwists": ["Xenoflora Jungle", "Dead Lands"],
-      "terrainIcons": ["xenoflora_jungle", "dead_lands"],
+      "terrainTwists": [
+        "Xenoflora Jungle",
+        "Dead Lands"
+      ],
+      "terrainIcons": [
+        "xenoflora_jungle",
+        "dead_lands"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -49,12 +124,32 @@
       "id": "niflegard",
       "name": "Niflegard",
       "subName": "Jotunheim",
-      "x": 450, "y": 860,
-      "powerLevels": { "Imperium": 1, "Xenos": 4, "Chaos": 1 },
-      "infrastructure": { "maxSlots": 2, "slots": ["active", "empty"] },
+      "x": 450,
+      "y": 860,
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 4,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 2,
+        "slots": [
+          {
+            "type": "Xenos Stronghold",
+            "alliance": "Xenos"
+          },
+          "empty"
+        ]
+      },
       "terrain": "Delvesite Facility & Dead Lands",
-      "terrainTwists": ["Delvesite Facility", "Dead Lands"],
-      "terrainIcons": ["delvesite_facility", "dead_lands"],
+      "terrainTwists": [
+        "Delvesite Facility",
+        "Dead Lands"
+      ],
+      "terrainIcons": [
+        "delvesite_facility",
+        "dead_lands"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -62,12 +157,38 @@
       "id": "harvest",
       "name": "Harvest",
       "subName": "Epsilon Indi",
-      "x": 330, "y": 710,
-      "powerLevels": { "Imperium": 2, "Xenos": 3, "Chaos": 1 },
-      "infrastructure": { "maxSlots": 3, "slots": ["active", "empty", "empty"] },
+      "x": 330,
+      "y": 710,
+      "powerLevels": {
+        "Imperium": 2,
+        "Xenos": 3,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          {
+            "type": "Staging Grounds",
+            "alliance": "Xenos"
+          },
+          {
+            "type": "Support Facility",
+            "alliance": "Xenos"
+          },
+          "empty"
+        ]
+      },
       "terrain": "Forge Complex & Xenoflora Plains",
-      "terrainTwists": ["Forge Complex", "Xenoflora Jungle", "Desolate Wastes"],
-      "terrainIcons": ["forge_complex", "xenoflora_jungle", "desolate_wastes"],
+      "terrainTwists": [
+        "Forge Complex",
+        "Xenoflora Jungle",
+        "Desolate Wastes"
+      ],
+      "terrainIcons": [
+        "forge_complex",
+        "xenoflora_jungle",
+        "desolate_wastes"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -75,15 +196,43 @@
       "id": "sarif_iv",
       "name": "Sarif IV",
       "subName": "Sarif",
-      "x": 320, "y": 450,
-      "powerLevels": { "Imperium": 1, "Xenos": 3, "Chaos": 2 },
-      "infrastructure": { "maxSlots": 3, "slots": ["active", "empty", "empty"] },
+      "x": 320,
+      "y": 450,
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 3,
+        "Chaos": 2
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Tomb Complex & Hab Sprawl",
-      "terrainTwists": ["Tomb Complex", "Hab Sprawl", "Xenoflora Jungle"],
-      "terrainIcons": ["tomb_complex", "hab_sprawl", "xenoflora_jungle"],
+      "terrainTwists": [
+        "Tomb Complex",
+        "Hab Sprawl",
+        "Xenoflora Jungle"
+      ],
+      "terrainIcons": [
+        "tomb_complex",
+        "hab_sprawl",
+        "xenoflora_jungle"
+      ],
       "fleets": [
-        { "alliance": "Xenos", "faction": "Necrons", "badge": "necron_scythe" },
-        { "alliance": "Xenos", "faction": "Aeldari", "badge": "aeldari_cruiser" }
+        {
+          "alliance": "Xenos",
+          "faction": "Necrons",
+          "badge": "necron_scythe"
+        },
+        {
+          "alliance": "Xenos",
+          "faction": "Aeldari",
+          "badge": "aeldari_cruiser"
+        }
       ],
       "destroyed": false
     },
@@ -91,14 +240,41 @@
       "id": "pluto_ii",
       "name": "Pluto II",
       "subName": "Styx",
-      "x": 410, "y": 240,
-      "powerLevels": { "Imperium": 1, "Xenos": 1, "Chaos": 4 },
-      "infrastructure": { "maxSlots": 3, "slots": ["active", "empty", "empty"] },
+      "x": 410,
+      "y": 240,
+      "powerLevels": {
+        "Imperium": 2,
+        "Xenos": 1,
+        "Chaos": 2
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          {
+            "type": "Staging Grounds",
+            "alliance": "Chaos"
+          },
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Rad Zone & Dead Lands",
-      "terrainTwists": ["Rad Zone", "Dead Lands", "Desolate Wastes"],
-      "terrainIcons": ["rad_zone", "dead_lands", "desolate_wastes"],
+      "terrainTwists": [
+        "Rad Zone",
+        "Dead Lands",
+        "Desolate Wastes"
+      ],
+      "terrainIcons": [
+        "rad_zone",
+        "dead_lands",
+        "desolate_wastes"
+      ],
       "fleets": [
-        { "alliance": "Chaos", "faction": "Thousand Sons", "badge": "chaos_grand_cruiser" }
+        {
+          "alliance": "Chaos",
+          "faction": "Thousand Sons",
+          "badge": "chaos_grand_cruiser"
+        }
       ],
       "destroyed": false
     },
@@ -106,12 +282,33 @@
       "id": "amazon_xi",
       "name": "Amazon XI",
       "subName": "Amazon",
-      "x": 600, "y": 110,
-      "powerLevels": { "Imperium": 1, "Xenos": 3, "Chaos": 2 },
-      "infrastructure": { "maxSlots": 3, "slots": ["empty", "empty", "empty"] },
+      "x": 600,
+      "y": 110,
+      "powerLevels": {
+        "Imperium": 3,
+        "Xenos": 1,
+        "Chaos": 3
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          {
+            "type": "Fortification Line",
+            "alliance": "Chaos"
+          },
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Xenoflora Jungle",
-      "terrainTwists": ["Xenoflora Jungle", "Dead Lands"],
-      "terrainIcons": ["xenoflora_jungle", "dead_lands"],
+      "terrainTwists": [
+        "Xenoflora Jungle",
+        "Dead Lands"
+      ],
+      "terrainIcons": [
+        "xenoflora_jungle",
+        "dead_lands"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -119,12 +316,33 @@
       "id": "nickel",
       "name": "Nickel",
       "subName": "Kuetsyarvi",
-      "x": 760, "y": 270,
-      "powerLevels": { "Imperium": 1, "Xenos": 4, "Chaos": 2 },
-      "infrastructure": { "maxSlots": 3, "slots": ["empty", "empty", "empty"] },
+      "x": 760,
+      "y": 270,
+      "powerLevels": {
+        "Imperium": 2,
+        "Xenos": 1,
+        "Chaos": 3
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          {
+            "type": "Staging Grounds",
+            "alliance": "Imperium"
+          },
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Tomb Complex",
-      "terrainTwists": ["Tomb Complex", "Desolate Wastes"],
-      "terrainIcons": ["tomb_complex", "desolate_wastes"],
+      "terrainTwists": [
+        "Tomb Complex",
+        "Desolate Wastes"
+      ],
+      "terrainIcons": [
+        "tomb_complex",
+        "desolate_wastes"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -132,12 +350,35 @@
       "id": "atacama",
       "name": "Atacama",
       "subName": "Humboldt",
-      "x": 930, "y": 330,
-      "powerLevels": { "Imperium": 2, "Xenos": 3, "Chaos": 1 },
-      "infrastructure": { "maxSlots": 3, "slots": ["active", "empty", "empty"] },
+      "x": 930,
+      "y": 330,
+      "powerLevels": {
+        "Imperium": 1,
+        "Xenos": 1,
+        "Chaos": 4
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          {
+            "type": "Chaos Stronghold",
+            "alliance": "Chaos"
+          },
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Tomb Complex & Delvesite Facility",
-      "terrainTwists": ["Tomb Complex", "Delvesite Facility", "Dead Lands"],
-      "terrainIcons": ["tomb_complex", "delvesite_facility", "dead_lands"],
+      "terrainTwists": [
+        "Tomb Complex",
+        "Delvesite Facility",
+        "Dead Lands"
+      ],
+      "terrainIcons": [
+        "tomb_complex",
+        "delvesite_facility",
+        "dead_lands"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -145,12 +386,32 @@
       "id": "baikonur",
       "name": "Байқоңыр",
       "subName": "Baikonur",
-      "x": 590, "y": 520,
-      "powerLevels": { "Imperium": 1, "Xenos": 3, "Chaos": 1 },
-      "infrastructure": { "maxSlots": 2, "slots": ["active", "empty"] },
+      "x": 590,
+      "y": 520,
+      "powerLevels": {
+        "Imperium": 2,
+        "Xenos": 2,
+        "Chaos": 2
+      },
+      "infrastructure": {
+        "maxSlots": 2,
+        "slots": [
+          {
+            "type": "Fortification Line",
+            "alliance": "Imperium"
+          },
+          "empty"
+        ]
+      },
       "terrain": "Spaceport & Hab Sprawl",
-      "terrainTwists": ["Spaceport", "Hab Sprawl"],
-      "terrainIcons": ["spaceport", "hab_sprawl"],
+      "terrainTwists": [
+        "Spaceport",
+        "Hab Sprawl"
+      ],
+      "terrainIcons": [
+        "spaceport",
+        "hab_sprawl"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -158,12 +419,34 @@
       "id": "aetna",
       "name": "Aetna",
       "subName": "Sicily",
-      "x": 800, "y": 560,
-      "powerLevels": { "Imperium": 1, "Xenos": 2, "Chaos": 2 },
-      "infrastructure": { "maxSlots": 4, "slots": ["active", "empty", "empty", "empty"] },
+      "x": 800,
+      "y": 560,
+      "powerLevels": {
+        "Imperium": 4,
+        "Xenos": 1,
+        "Chaos": 1
+      },
+      "infrastructure": {
+        "maxSlots": 4,
+        "slots": [
+          {
+            "type": "Imperial Stronghold",
+            "alliance": "Imperium"
+          },
+          "empty",
+          "empty",
+          "empty"
+        ]
+      },
       "terrain": "Desolate Wastes",
-      "terrainTwists": ["Desolate Wastes", "Rad Zone"],
-      "terrainIcons": ["desolate_wastes", "rad_zone"],
+      "terrainTwists": [
+        "Desolate Wastes",
+        "Rad Zone"
+      ],
+      "terrainIcons": [
+        "desolate_wastes",
+        "rad_zone"
+      ],
       "fleets": [],
       "destroyed": false
     },
@@ -171,41 +454,143 @@
       "id": "gj_3378b",
       "name": "GJ 3378b",
       "subName": "GJ 3378",
-      "x": 870, "y": 820,
-      "powerLevels": { "Imperium": 4, "Xenos": 3, "Chaos": 1 },
-      "infrastructure": { "maxSlots": 3, "slots": ["active", "active", "active"] },
+      "x": 870,
+      "y": 820,
+      "powerLevels": {
+        "Imperium": 3,
+        "Xenos": 4,
+        "Chaos": 4
+      },
+      "infrastructure": {
+        "maxSlots": 3,
+        "slots": [
+          {
+            "type": "Fortification Line",
+            "alliance": "Chaos"
+          },
+          {
+            "type": "Staging Grounds",
+            "alliance": "Imperium"
+          },
+          {
+            "type": "Fortification Line",
+            "alliance": "Xenos"
+          }
+        ]
+      },
       "terrain": "Hab Sprawl & Rad Zone Citadel",
-      "terrainTwists": ["Hab Sprawl", "Rad Zone", "Spaceport"],
-      "terrainIcons": ["hab_sprawl", "rad_zone", "spaceport"],
+      "terrainTwists": [
+        "Hab Sprawl",
+        "Rad Zone",
+        "Spaceport"
+      ],
+      "terrainIcons": [
+        "hab_sprawl",
+        "rad_zone",
+        "spaceport"
+      ],
       "fleets": [
-        { "alliance": "Imperium", "faction": "Imperial Knights", "badge": "imperial_cruiser" },
-        { "alliance": "Imperium", "faction": "Imperial Guard", "badge": "imperial_battleship" }
+        {
+          "alliance": "Imperium",
+          "faction": "Imperial Knights",
+          "badge": "imperial_cruiser"
+        },
+        {
+          "alliance": "Imperium",
+          "faction": "Imperial Guard",
+          "badge": "imperial_battleship"
+        }
       ],
       "destroyed": false
     }
   ],
   "warpLanes": [
-    ["sidon", "knossos"],
-    ["sidon", "sarif_iv"],
-    ["sidon", "pluto_ii"],
-    ["knossos", "sarif_iv"],
-    ["sarif_iv", "harvest"],
-    ["harvest", "myrkvidr"],
-    ["harvest", "niflegard"],
-    ["harvest", "gj_3378b"],
-    ["niflegard", "myrkvidr"],
-    ["pluto_ii", "amazon_xi"],
-    ["pluto_ii", "nickel"],
-    ["amazon_xi", "nickel"],
-    ["nickel", "atacama"],
-    ["nickel", "baikonur"],
-    ["atacama", "aetna"],
-    ["atacama", "gj_3378b"],
-    ["baikonur", "aetna"],
-    ["baikonur", "gj_3378b"]
+    [
+      "sidon",
+      "knossos"
+    ],
+    [
+      "sidon",
+      "sarif_iv"
+    ],
+    [
+      "sidon",
+      "pluto_ii"
+    ],
+    [
+      "knossos",
+      "sarif_iv"
+    ],
+    [
+      "sarif_iv",
+      "harvest"
+    ],
+    [
+      "harvest",
+      "myrkvidr"
+    ],
+    [
+      "harvest",
+      "niflegard"
+    ],
+    [
+      "harvest",
+      "gj_3378b"
+    ],
+    [
+      "niflegard",
+      "myrkvidr"
+    ],
+    [
+      "pluto_ii",
+      "amazon_xi"
+    ],
+    [
+      "pluto_ii",
+      "nickel"
+    ],
+    [
+      "amazon_xi",
+      "nickel"
+    ],
+    [
+      "nickel",
+      "atacama"
+    ],
+    [
+      "nickel",
+      "baikonur"
+    ],
+    [
+      "atacama",
+      "aetna"
+    ],
+    [
+      "atacama",
+      "gj_3378b"
+    ],
+    [
+      "baikonur",
+      "aetna"
+    ],
+    [
+      "baikonur",
+      "gj_3378b"
+    ]
   ],
   "offensiveVectors": [
-    { "from": "gj_3378b", "to": "harvest", "alliance": "Imperium", "label": "Crusade Spearhead" },
-    { "from": "pluto_ii", "to": "pluto_ii", "alliance": "Chaos", "label": "Orbital Bombardment" }
-  ]
+    {
+      "from": "gj_3378b",
+      "to": "harvest",
+      "alliance": "Imperium",
+      "label": "Crusade Spearhead"
+    },
+    {
+      "from": "pluto_ii",
+      "to": "pluto_ii",
+      "alliance": "Chaos",
+      "label": "Orbital Bombardment"
+    }
+  ],
+  "activeKillTeams": []
 }
