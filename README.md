@@ -4,41 +4,50 @@ A static, dependency-free tactical campaign terminal for the *War on the Vespato
 
 ## Features
 
-- **All 13 systems and 16 warp lanes** read straight from `campaign_data.json`. Both the 2D map and the 3D projection place every world at its exact `x`/`y` coordinates, so the sector's outer perimeter is the same in both views. Current topology:
+- **All 13 systems and 18 warp lanes** read straight from `campaign_data.json`. Both the 2D map and the 3D projection place every world at its exact `x`/`y` coordinates, so the sector's outer perimeter is the same in both views. Current topology:
+  - Sidon links to Knossos, Pluto II and Sarif IV.
   - Knossos links only to Sidon and Sarif IV.
   - Pluto II links to Sidon, Amazon XI and Nickel.
-  - Sarif IV links to Knossos and Harvest.
+  - Sarif IV links to Sidon, Knossos and Harvest.
   - Nickel links to Pluto II, Amazon XI, Atacama and Baikonur.
   - Baikonur links to Nickel, Aetna and GJ 3378b.
   - Aetna links only to Atacama and Baikonur.
-  - Harvest links to Sarif IV, Niflegard and GJ 3378b.
+  - Harvest links to Sarif IV, Myrkviðr, Niflegard and GJ 3378b.
   - Niflegard links to Harvest and Myrkviðr.
-- **Official Crusade terrain twists.** Each world belongs to one terrain category, and the category's three twists are applied when the data loads (see [Terrain categories](#terrain-categories)).
+- **The 9 official terrain twists:** Spaceport, Desolate Wastes, Xenoflora Jungle, Rad Zone, Forge Complex, Hab Sprawl, Delvesite Facility, Dead Lands and Tomb Complex. Each world lists its own `terrainTwists` (see [Terrain twists](#terrain-twists)). Under every map placard, green circular terrain glyphs show that world's twists. They replace the old faction circles.
+- **Collapsible Theatre Index.** `[ ◀ HIDE INDEX / ▶ SHOW INDEX ]` at the top left hides the left panel. The tactical canvas widens to fill the space and refits without distortion. The choice is remembered between visits.
+- **Canonical ship silhouettes** in 2D and 3D:
+  - Imperium: gothic cathedral wedge cruiser with a prow ram
+  - Chaos: winged slaughter cruiser with a spiked, jagged prow
+  - Necrons: crescent scythe raider
+  - Aeldari: curved solar-sail blade
 - **`[ VECTORS: ON / OFF ]` toggle** in the top HUD shows or hides the active `offensiveVectors`, coloured by alliance (Imperium gold, Xenos green, Chaos red). The setting is remembered between visits.
   - In Tactical 2D, animated chevrons glide along the warp lane toward the target, with a pulsing arrowhead, a target reticle and the assault label.
   - In Cogitator 3D, comet-tailed projectiles travel along curved orbital arcs from origin to target and loop continuously.
+  - **Orbital strikes** (`from` equals `to`) target the host world itself:
+    - In 2D, a looping arrow curves around the orbit reticle, then dives toward the core with a pulsing impact marker.
+    - In 3D, a particle conduit spirals down from high orbit to the surface.
   - Vectors that touch an Exterminated world are suspended and not drawn.
 - **Per-alliance Power Levels (1–4).** Each world has a separate rating for Imperium (`#E5A93C`), Xenos (`#33FF33`), and Chaos (`#FF3333`). They appear as segmented vertical gauge cards on the map, in the theatre index, and in the dossier.
 - **Planetary Dossier** showing:
   - designation, world and system name
-  - a **Terrain Profile**: classification, the three active terrain twists, and SVG tactical glyph badges for each `terrainIcons` entry (radiation trefoil, bio-spore, magma caldera, Mechanicus cog, glacier, fortress bastion, and others)
+  - a **Terrain Profile**: the classification plus each active terrain twist with its official glyph badge
   - infrastructure slot badges (Empty, Fortification Line, Support Facility, Staging Grounds, Stronghold) with alliance ownership
-  - garrisoned fleet cards
+  - garrisoned fleet cards, each with its ship silhouette and faction insignia
   - linked warp lanes
   - inbound and outbound **Offensive Vectors**
 - **Faction insignia:** Aquila (Imperial Guard), Knight Crest (Imperial Knights), Necron Ankh, Aeldari Rune, Chaos Star (Thousand Sons), and Nurgle Fly (Death Guard).
 - **`[ TACTICAL 2D / COGITATOR 3D ]` toggle** in the top HUD. The 3D view shows:
-  - rotating planets with terrain-specific procedural surfaces and effects:
-    - Niflegard: crystalline ice with blizzard cloud swirls
-    - Knossos: smog-green with rust and metal wireframe seams
-    - Myrkviðr: dark primeval forest
-    - Pluto II: black volcanic rock with pulsing crimson lava seams
-    - Aetna: molten orange crust venting smoke particles
-    - Harvest: golden-amber and green agri patchwork
-    - GJ 3378b: fortress world inside rotating golden void-shield rings
-    - Amazon XI: jungle swirls under cloud cover
+  - rotating planets whose procedural surface comes from their first terrain twist. Examples:
+    - Xenoflora Jungle: green jungle swirls under cloud cover
+    - Rad Zone: blotched surface with a pulsing hazard glow
+    - Forge Complex: smog with rust-coloured seams
+    - Tomb Complex: glowing necron circuitry
+    - Desolate Wastes: cracked, smoking crust
+  - golden void-shield rings around fortress worlds
   - glowing warp-lane conduits
-  - faction ships orbiting their worlds
+  - extruded faction ships orbiting their worlds
+  - a construction effect: a rotating wireframe scaffold sphere with particle sparks
   - an Exterminatus animation that shatters the world into flaming debris
 - **Retro CRT look:** scanlines, flicker, phosphor glow, and terminal typography. Respects `prefers-reduced-motion`.
 
@@ -67,9 +76,10 @@ Press **◇ WARMASTER OVERRIDE** and enter the passkey from [`config.js`](config
 | Fleet movement | In Tactical 2D, drag a fleet marker onto a world connected by a **direct** warp lane, or use the dossier **TRANSFER** selector. Moves to non-adjacent or destroyed worlds are refused. |
 | Fleets | Commission (faction, optional name) or decommission fleets in the dossier. Unnamed fleets display as `<Faction> Battlegroup`. |
 | Infrastructure | Change slot capacity (max 6; only empty slots can be trimmed), set each slot's type (Empty, Active, Fortification Line, Support Facility, Staging Grounds, Stronghold) and owning alliance, toggle **DESTROYED**, or clear a slot (✕). Strongholds rename automatically (Imperial / Xenos / Chaos Stronghold). |
+| Construct | **▲ CONSTRUCT INFRASTRUCTURE**: choose a type and an alliance. It builds in the first empty slot, opening a new slot if needed (max 6). Raising capacity with **+** also plays the effect. In 2D, the effect is expanding alliance-coloured hexagonal wireframes over a holographic blueprint scan. In 3D, it is the scaffold sphere. |
 | Exterminatus | **☢ INITIATE EXTERMINATUS** turns the world into a red shattered hazard wireframe, blocks its lanes, and plays the destruction sequence in 3D. **↺ RESTORE WORLD** reverses it. |
-| Launch Assault | In the dossier's **OFFENSIVE VECTORS** section, pick the attacking alliance, a target connected by a direct lane, and an optional designation, then press **⚔ LAUNCH ASSAULT**. The source must be intact, the target not destroyed, and the same from/to/alliance cannot be launched twice. Press **✕** on a vector card to recall it. |
-| Persist | **⇩ EXPORT COGITATOR STATE** downloads an updated `campaign_data.json` with the lanes, offensive vectors and canonical terrain twists. |
+| Launch Assault | In the dossier's **OFFENSIVE VECTORS** section, pick the attacking alliance and a target: either a world connected by a direct lane, or **⊙ ORBITAL STRIKE** against the host world itself. Add an optional designation, then press **⚔ LAUNCH ASSAULT**. The source must be intact, the target not destroyed, and the same from/to/alliance cannot be launched twice. Press **✕** on a vector card to recall it. |
+| Persist | **⇩ EXPORT COGITATOR STATE** downloads an updated `campaign_data.json` with the lanes, offensive vectors (including orbital strikes), infrastructure and terrain twists. |
 
 > The passkey is only a UI lock: anyone can read the static files. Real authority is whoever can commit to the repository.
 
@@ -98,44 +108,47 @@ All edits stay in browser memory until exported. To save them:
       "maxSlots": 3,                                                  // 0–6
       "slots": ["active", "empty", { "type": "Imperial Stronghold", "alliance": "Imperium", "destroyed": true }]
     },
-    "terrain": "Fortress World",
-    "terrainTraits": ["...", "...", "..."],                           // the three terrain twists
-    "terrainIcons": ["bastion", "trench", "rad_shield"],              // glyph keys, see emblems.js TERRAIN_GLYPHS
+    "terrain": "Hab Sprawl & Rad Zone Citadel",
+    "terrainTwists": ["Hab Sprawl", "Rad Zone", "Spaceport"],        // 1-3 of the 9 official twists
+    "terrainIcons": ["hab_sprawl", "rad_zone", "spaceport"],          // glyph keys, kept in step with terrainTwists
     "fleets": [{ "alliance": "Imperium", "faction": "Imperial Knights", "badge": "knight_helm" }],  // optional "name"
     "destroyed": false
   }],
-  "warpLanes": [["harvest", "gj_3378b"], ["atacama", "gj_3378b"]],
+  "warpLanes": [["harvest", "gj_3378b"], ["sidon", "sarif_iv"]],
   "offensiveVectors": [
-    { "from": "gj_3378b", "to": "harvest", "alliance": "Imperium", "label": "Crusade Spearhead" }  // label optional, 1–80 chars
+    { "from": "gj_3378b", "to": "harvest", "alliance": "Imperium", "label": "Crusade Spearhead" },  // label optional, 1–80 chars
+    { "from": "pluto_ii", "to": "pluto_ii", "alliance": "Chaos", "label": "Orbital Bombardment" }  // from == to: orbital strike
   ]
 }
 ```
 
-Planets may also carry an optional `terrainCategory`. It is filled in automatically on load.
+### Terrain twists
 
-### Terrain categories
-
-| Category | Worlds | Terrain twists |
+| Twist | Glyph key | Worlds |
 | --- | --- | --- |
-| Ash Wastes | Sidon, Knossos | Choking Fallout, Corroded Redoubts, Slag Runoff |
-| Death World | Amazon XI, Myrkviðr | Predatory Foliage, Spore Choke, Bio-Resonant Canopy |
-| Tomb World | Nickel, Atacama, Sarif IV | Awoken Monolith Array, Gauss Dispersion, Phase Flares |
-| Warp Rift | Pluto II, Aetna | Perils of the Empyrean, Molten Sump, Screaming Geysers |
-| Fortress Bastion | GJ 3378b, Niflegard, Baikonur, Harvest | Void Shield Grid, Trench Bastions, Heavy Munitions Depot |
+| Spaceport | `spaceport` | Baikonur, GJ 3378b |
+| Desolate Wastes | `desolate_wastes` | Sidon, Harvest, Pluto II, Nickel, Aetna |
+| Xenoflora Jungle | `xenoflora_jungle` | Myrkviðr, Harvest, Sarif IV, Amazon XI |
+| Rad Zone | `rad_zone` | Sidon, Pluto II, Aetna, GJ 3378b |
+| Forge Complex | `forge_complex` | Knossos, Harvest |
+| Hab Sprawl | `hab_sprawl` | Knossos, Sarif IV, Baikonur, GJ 3378b |
+| Delvesite Facility | `delvesite_facility` | Sidon, Niflegard, Atacama |
+| Dead Lands | `dead_lands` | Myrkviðr, Niflegard, Pluto II, Amazon XI, Atacama |
+| Tomb Complex | `tomb_complex` | Sarif IV, Nickel, Atacama |
 
-`normalizeCampaign` in [`campaign.js`](campaign.js) sets each world's `terrainCategory` and canonical `terrainTraits`. It uses the world id, or matches the terrain text for any world not in the table. The status bar reports how many worlds were synced. The source file is never rewritten, so **export** and commit to persist the canonical twists.
+`normalizeCampaign` in [`campaign.js`](campaign.js) rebuilds `terrainIcons` from `terrainTwists` on every load, so the glyphs always match the twists. Older files without `terrainTwists` are migrated from any official twist names found in `terrainTraits` or `terrainIcons`. The obsolete `terrainTraits` and `terrainCategory` fields are dropped, and the status bar reports how many worlds were migrated. The source file is never rewritten; **export** and commit to persist the result.
 
-Infrastructure slots are the strings `"empty"` and `"active"` until a Warmaster gives a slot a type, owner or destroyed state. It then becomes an object `{ "type", "alliance"?, "destroyed"? }`. Fleet `badge` keys are `imperial_aquila`, `knight_helm`, `necron_monolith`, `craftworld_rune`, `chaos_star` and `nurgle_fly`. Unknown terrain icon keys fall back to a generic glyph.
+Infrastructure slots are the strings `"empty"` and `"active"` until a Warmaster gives a slot a type, owner or destroyed state. It then becomes an object `{ "type", "alliance"?, "destroyed"? }`. Fleet `badge` keys are `imperial_aquila`, `knight_helm`, `necron_monolith`, `craftworld_rune`, `chaos_star` and `nurgle_fly`.
 
 [`campaign.js`](campaign.js) validates every load and import:
 
 - exactly the three alliances, with unique factions
 - integer Power Levels from 1 to 4
+- 1–3 distinct official `terrainTwists` per world
 - `infrastructure.slots` has exactly `maxSlots` entries
 - each fleet's alliance matches its faction
 - lanes that are not duplicated
-- a known `terrainCategory`, if one is given
-- offensive vectors between two distinct existing worlds joined by a direct lane, with a valid alliance, an optional label of 1–80 characters, and no duplicate from/to/alliance
+- offensive vectors that either follow a direct lane between two worlds or target their own world (`from == to`, an orbital strike), with a valid alliance, an optional label of 1–80 characters, and no duplicate from/to/alliance
 
 Unknown extra properties are preserved on export.
 
@@ -177,8 +190,8 @@ The neighbouring `DiscordBot/` folder is a separate project; nothing here modifi
   ```
 - **Read (same machine):** open `../MapWebPage/campaign_data.json` directly, read-only, and reload it when the file changes.
 - **Write:** have the bot (or a Warmaster) commit an updated `campaign_data.json`, either with `git commit` + `git push` or the contents API `PUT` with the file's current `sha`. The Pages workflow redeploys automatically. Keep to the schema above. Slots are `"empty"`, `"active"`, or `{ type, alliance?, destroyed? }`. Strongholds are named `<Imperial|Xenos|Chaos> Stronghold`, and other typed slots are `Fortification Line`, `Support Facility`, or `Staging Grounds`. When reading over HTTP, add a cache-busting query (`?t=<timestamp>`) so the bot always sees the latest deploy.
-- **Offensive vectors:** read `offensiveVectors` to announce active assaults, for example "⚔ Chaos — Warp Incursion: Pluto II → Nickel". Ignore any vector whose source or target has `destroyed: true`; `activeVectors` does this. A bot can add an assault with `launchAssault(data, from, to, alliance, label)` or remove one with `recallAssault(data, index)`, then commit the file.
-- Useful helpers for a JavaScript bot: `normalizeCampaign`, `validateCampaign`, `activeVectors`, `moveFleet`, `setPowerLevel`, `setSlot`, `slotInfo`, `fleetTitle`, and `serializeCampaign` from [`campaign.js`](campaign.js) are pure ES modules with no DOM dependencies.
+- **Offensive vectors:** read `offensiveVectors` to announce active assaults, for example "⚔ Chaos — Warp Incursion: Pluto II → Nickel". A vector whose `from` equals its `to` is an orbital strike on that world, for example "⊙ Chaos — Orbital Bombardment: Pluto II". Ignore any vector whose source or target has `destroyed: true`; `activeVectors` does this. A bot can add an assault with `launchAssault(data, from, to, alliance, label)` or remove one with `recallAssault(data, index)`, then commit the file.
+- Useful helpers for a JavaScript bot: `normalizeCampaign`, `validateCampaign`, `activeVectors`, `constructInfrastructure`, `moveFleet`, `setPowerLevel`, `setSlot`, `slotInfo`, `fleetTitle`, and `serializeCampaign` from [`campaign.js`](campaign.js) are pure ES modules with no DOM dependencies.
 
 ## Files
 
@@ -188,7 +201,7 @@ The neighbouring `DiscordBot/` folder is a separate project; nothing here modifi
 | `app.js` | 2D SVG map, theatre index, dossier, Warmaster commands, export/import |
 | `view3d.js` | Integrated Three.js Cogitator 3D view (lazy-loaded on toggle) |
 | `campaign.js` | Schema validation and campaign rules |
-| `emblems.js`, `terrain.js` | Faction/badge/infrastructure insignia, terrain glyphs, and terrain surface/3D effect themes |
+| `emblems.js`, `terrain.js` | Faction insignia, ship silhouettes, the 9 terrain twist glyphs, and terrain surface/3D effect themes |
 | `config.js` | Warmaster passkey and map scale |
 | `vendor/` | Three.js r180 (MIT) |
 | `tests/` | Node test suite |

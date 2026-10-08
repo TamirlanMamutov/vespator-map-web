@@ -6,44 +6,33 @@ export const INFRASTRUCTURE_TYPES = ["Fortification Line", "Support Facility", "
 // "Empty" and "Active" are the plain string slots used by campaign_data.json; typed slots are objects.
 export const SLOT_CATEGORIES = ["Empty", "Active", ...INFRASTRUCTURE_TYPES];
 export const DEFAULT_BADGES = {
-  "Imperial Guard": "imperial_aquila",
-  "Imperial Knights": "knight_helm",
-  Necrons: "necron_monolith",
-  Aeldari: "craftworld_rune",
-  "Thousand Sons": "chaos_star",
-  "Death Guard": "nurgle_fly",
+  "Imperial Guard": "imperial_battleship",
+  "Imperial Knights": "imperial_cruiser",
+  Necrons: "necron_scythe",
+  Aeldari: "aeldari_cruiser",
+  "Thousand Sons": "chaos_grand_cruiser",
+  "Death Guard": "chaos_grand_cruiser",
 };
 const STRONGHOLD_PREFIX = { Imperium: "Imperial", Xenos: "Xenos", Chaos: "Chaos" };
 
-// Official Vespator Front Crusade terrain categories. Each world draws its three twists from its category.
-export const CRUSADE_TERRAIN = {
-  "Ash Wastes": {
-    twists: ["Choking Fallout", "Corroded Redoubts", "Slag Runoff"],
-    worlds: ["sidon", "knossos"],
-    pattern: /ash|manufactorum|sump|industrial|forge|smog/i,
-  },
-  "Death World": {
-    twists: ["Predatory Foliage", "Spore Choke", "Bio-Resonant Canopy"],
-    worlds: ["amazon_xi", "myrkvidr"],
-    pattern: /death world|jungle|canopy|forest|primeval/i,
-  },
-  "Tomb World": {
-    twists: ["Awoken Monolith Array", "Gauss Dispersion", "Phase Flares"],
-    worlds: ["nickel", "atacama", "sarif_iv"],
-    pattern: /tomb|crypt|necron|monolith/i,
-  },
-  "Warp Rift": {
-    twists: ["Perils of the Empyrean", "Molten Sump", "Screaming Geysers"],
-    worlds: ["pluto_ii", "aetna"],
-    pattern: /warp|rift|volcan|magma|caldera|lava/i,
-  },
-  "Fortress Bastion": {
-    twists: ["Void Shield Grid", "Trench Bastions", "Heavy Munitions Depot"],
-    worlds: ["gj_3378b", "niflegard", "baikonur", "harvest"],
-    pattern: /bastion|fortress|citadel|redoubt|depot|spire/i,
-  },
+// The nine official War on the Vespator Front terrain twists, keyed by their terrainIcons glyph.
+export const TERRAIN_TWISTS = {
+  spaceport: "Spaceport",
+  desolate_wastes: "Desolate Wastes",
+  xenoflora_jungle: "Xenoflora Jungle",
+  rad_zone: "Rad Zone",
+  forge_complex: "Forge Complex",
+  hab_sprawl: "Hab Sprawl",
+  delvesite_facility: "Delvesite Facility",
+  dead_lands: "Dead Lands",
+  tomb_complex: "Tomb Complex",
 };
-export const TERRAIN_CATEGORIES = Object.keys(CRUSADE_TERRAIN);
+export const TWIST_NAMES = Object.values(TERRAIN_TWISTS);
+export const MAX_TWISTS = 3;
+
+export function twistKey(name) {
+  return Object.keys(TERRAIN_TWISTS).find((icon) => TERRAIN_TWISTS[icon] === name) || null;
+}
 
 const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const text = (value, max = 120) => typeof value === "string" && value.trim().length > 0 && value.length <= max;
@@ -76,9 +65,12 @@ export function validateCampaign(data) {
       const level = planet.powerLevels[alliance];
       if (!Number.isInteger(level) || level < MIN_POWER || level > MAX_POWER) fail(`${where} ${alliance} Power Level must be an integer from ${MIN_POWER} to ${MAX_POWER}.`);
     }
-    if (!text(planet.terrain) || !Array.isArray(planet.terrainTraits) || !planet.terrainTraits.every((trait) => text(trait))) fail(`${where} needs a terrain class and terrain traits.`);
-    if (planet.terrainIcons !== undefined && (!Array.isArray(planet.terrainIcons) || !planet.terrainIcons.every(key))) fail(`${where} terrainIcons must be a list of icon keys.`);
-    if (planet.terrainCategory !== undefined && !TERRAIN_CATEGORIES.includes(planet.terrainCategory)) fail(`${where} terrainCategory must be one of ${TERRAIN_CATEGORIES.join(", ")}.`);
+    if (!text(planet.terrain)) fail(`${where} needs a terrain classification.`);
+    const twists = planet.terrainTwists;
+    if (!Array.isArray(twists) || !twists.length || twists.length > MAX_TWISTS || new Set(twists).size !== twists.length || !twists.every((twist) => TWIST_NAMES.includes(twist))) {
+      fail(`${where} terrainTwists must list 1–${MAX_TWISTS} distinct official twists (${TWIST_NAMES.join(", ")}).`);
+    }
+    if (planet.terrainIcons !== undefined && (!Array.isArray(planet.terrainIcons) || !planet.terrainIcons.every((icon) => key(icon) && TERRAIN_TWISTS[icon]))) fail(`${where} terrainIcons must be official terrain twist glyph keys.`);
     const infrastructure = planet.infrastructure;
     if (!record(infrastructure) || !Number.isInteger(infrastructure.maxSlots) || infrastructure.maxSlots < 0 || infrastructure.maxSlots > MAX_INFRASTRUCTURE) fail(`${where} infrastructure.maxSlots must be 0–${MAX_INFRASTRUCTURE}.`);
     if (!Array.isArray(infrastructure.slots) || infrastructure.slots.length !== infrastructure.maxSlots) fail(`${where} infrastructure.slots must list exactly maxSlots entries.`);
@@ -108,8 +100,9 @@ export function validateCampaign(data) {
     if (!Array.isArray(data.offensiveVectors)) fail("offensiveVectors must be an array.");
     const seen = new Set();
     for (const assault of data.offensiveVectors) {
-      if (!record(assault) || !ids.has(assault.from) || !ids.has(assault.to) || assault.from === assault.to) fail("offensive vectors must run between two distinct existing worlds.");
-      if (!lanes.has([assault.from, assault.to].sort().join("|"))) fail(`offensive vector ${assault.from} → ${assault.to} must follow a direct warp lane.`);
+      if (!record(assault) || !ids.has(assault.from) || !ids.has(assault.to)) fail("offensive vectors must reference existing worlds.");
+      // from === to is an orbital engagement against the host world and needs no lane.
+      if (assault.from !== assault.to && !lanes.has([assault.from, assault.to].sort().join("|"))) fail(`offensive vector ${assault.from} → ${assault.to} must follow a direct warp lane.`);
       if (!ALLIANCES.includes(assault.alliance)) fail(`offensive vector ${assault.from} → ${assault.to} needs an alliance of ${ALLIANCES.join(", ")}.`);
       if (assault.label !== undefined && !text(assault.label, 80)) fail("offensive vector labels must be 1–80 characters.");
       const id = `${assault.from}>${assault.to}>${assault.alliance}`;
@@ -120,26 +113,26 @@ export function validateCampaign(data) {
   return data;
 }
 
-// Validates, then applies the official terrain twists and default fields. Returns the number of worlds whose twists changed.
+// Migrates legacy terrain fields to terrainTwists, keeps terrainIcons in step with the twists, then validates.
+// Returns the number of worlds that changed.
 export function normalizeCampaign(data) {
-  validateCampaign(data);
-  let synced = 0;
-  for (const planet of data.planets) {
-    const category = terrainCategory(planet);
-    if (!category) continue;
-    const twists = CRUSADE_TERRAIN[category].twists;
-    if (planet.terrainTraits.join("|") !== twists.join("|")) synced++;
-    planet.terrainCategory = category;
-    planet.terrainTraits = [...twists];
+  let changed = 0;
+  for (const planet of Array.isArray(data?.planets) ? data.planets : []) {
+    if (!record(planet)) continue;
+    const before = JSON.stringify([planet.terrainTwists, planet.terrainIcons, planet.terrainTraits, planet.terrainCategory]);
+    if (!Array.isArray(planet.terrainTwists)) {
+      const legacy = [...(Array.isArray(planet.terrainTraits) ? planet.terrainTraits : []), ...(Array.isArray(planet.terrainIcons) ? planet.terrainIcons.map((icon) => TERRAIN_TWISTS[icon]) : [])];
+      const twists = [...new Set(legacy.filter((name) => TWIST_NAMES.includes(name)))].slice(0, MAX_TWISTS);
+      if (twists.length) planet.terrainTwists = twists;
+    }
+    delete planet.terrainTraits;
+    delete planet.terrainCategory;
+    if (Array.isArray(planet.terrainTwists) && planet.terrainTwists.every((twist) => TWIST_NAMES.includes(twist))) planet.terrainIcons = planet.terrainTwists.map(twistKey);
+    if (JSON.stringify([planet.terrainTwists, planet.terrainIcons, planet.terrainTraits, planet.terrainCategory]) !== before) changed++;
   }
+  validateCampaign(data);
   data.offensiveVectors ??= [];
-  return synced;
-}
-
-export function terrainCategory(planet) {
-  if (planet.terrainCategory && CRUSADE_TERRAIN[planet.terrainCategory]) return planet.terrainCategory;
-  const byWorld = TERRAIN_CATEGORIES.find((name) => CRUSADE_TERRAIN[name].worlds.includes(planet.id));
-  return byWorld || TERRAIN_CATEGORIES.find((name) => CRUSADE_TERRAIN[name].pattern.test(planet.terrain)) || null;
+  return changed;
 }
 
 export function factionAlliance(data, faction) {
@@ -221,6 +214,21 @@ export function setInfrastructureCapacity(data, planetId, capacity) {
   infrastructure.maxSlots = capacity;
 }
 
+// Builds into the first empty slot, opening a new slot when the world is full. Returns the slot index used.
+export function constructInfrastructure(data, planetId, category, alliance) {
+  const planet = requireOperational(data, planetId);
+  if (!INFRASTRUCTURE_TYPES.includes(category) && category !== "Active") throw new Error("Choose an infrastructure type to construct.");
+  if (alliance && !ALLIANCES.includes(alliance)) throw new Error("Unknown alliance.");
+  let index = planet.infrastructure.slots.indexOf("empty");
+  if (index < 0) {
+    if (planet.infrastructure.maxSlots >= MAX_INFRASTRUCTURE) throw new Error(`${planet.name} has no free infrastructure slots (maximum ${MAX_INFRASTRUCTURE}).`);
+    setInfrastructureCapacity(data, planetId, planet.infrastructure.maxSlots + 1);
+    index = planet.infrastructure.slots.length - 1;
+  }
+  setSlot(data, planetId, index, { category, alliance: alliance || null, destroyed: false });
+  return index;
+}
+
 export function fleetTitle(fleet) {
   return fleet.name || `${fleet.faction} Battlegroup`;
 }
@@ -271,8 +279,15 @@ export function activeVectors(data) {
   });
 }
 
+export function isOrbitalStrike(assault) {
+  return assault.from === assault.to;
+}
+
+// The host world comes first: it is a valid target for an orbital engagement.
 export function assaultTargets(data, planetId) {
-  return neighbors(data, planetId).filter((id) => canTransfer(data, planetId, id));
+  const host = planetById(data, planetId);
+  if (!host || host.destroyed) return [];
+  return [planetId, ...neighbors(data, planetId).filter((id) => canTransfer(data, planetId, id))];
 }
 
 export function launchAssault(data, fromId, toId, alliance, label) {
@@ -280,7 +295,7 @@ export function launchAssault(data, fromId, toId, alliance, label) {
   const target = planetById(data, toId);
   if (!target) throw new Error("Target world no longer exists.");
   if (target.destroyed) throw new Error(`${target.name} is a destroyed world; there is nothing left to assault.`);
-  if (!neighbors(data, fromId).includes(toId)) throw new Error("Assault denied: the target must share a direct warp lane.");
+  if (fromId !== toId && !neighbors(data, fromId).includes(toId)) throw new Error("Assault denied: the target must share a direct warp lane.");
   if (!ALLIANCES.includes(alliance)) throw new Error("Unknown alliance.");
   if (label !== undefined && label.trim() && !text(label.trim(), 80)) throw new Error("Assault designation must be 1–80 characters.");
   data.offensiveVectors ??= [];
@@ -299,7 +314,8 @@ export function recallAssault(data, index) {
 }
 
 export function assaultTitle(data, assault) {
-  return assault.label || `${assault.alliance} Assault on ${planetById(data, assault.to)?.name || assault.to}`;
+  const target = planetById(data, assault.to)?.name || assault.to;
+  return assault.label || (isOrbitalStrike(assault) ? `${assault.alliance} Orbital Strike on ${target}` : `${assault.alliance} Assault on ${target}`);
 }
 
 export function serializeCampaign(data) {

@@ -1,11 +1,14 @@
 import {
-  ALLIANCES, MIN_POWER, MAX_POWER, MAX_INFRASTRUCTURE, SLOT_CATEGORIES,
+  ALLIANCES, MIN_POWER, MAX_POWER, MAX_INFRASTRUCTURE, SLOT_CATEGORIES, INFRASTRUCTURE_TYPES, twistKey,
   validateCampaign, normalizeCampaign, planetById, neighbors, planetNames, dominantAlliance, slotInfo, occupiedSlots,
-  setPowerLevel, setInfrastructureCapacity, setSlot, fleetTitle, terrainCategory,
+  setPowerLevel, setInfrastructureCapacity, setSlot, fleetTitle, constructInfrastructure, infrastructureType,
   commissionFleet, decommissionFleet, canTransfer, moveFleet, setDestroyed, serializeCampaign,
-  activeVectors, assaultTargets, launchAssault, recallAssault, assaultTitle,
+  activeVectors, assaultTargets, launchAssault, recallAssault, assaultTitle, isOrbitalStrike,
 } from "./campaign.js";
-import { EMBLEMS, TERRAIN_GLYPHS, ALLIANCE_EMBLEMS, INFRASTRUCTURE_EMBLEMS, factionEmblem, fleetEmblem, glyphKey, emblemLayers } from "./emblems.js";
+import {
+  EMBLEMS, TERRAIN_GLYPHS, SHIP_SILHOUETTES, ALLIANCE_EMBLEMS, INFRASTRUCTURE_EMBLEMS,
+  factionEmblem, fleetEmblem, glyphKey, emblemLayers, shipKey, shipScale, shipClass, shipPath,
+} from "./emblems.js";
 import { terrainTheme } from "./terrain.js";
 import { settings } from "./config.js";
 
@@ -28,10 +31,12 @@ let gesture = null;
 let suppressClick = false;
 let tagLayout = new Map();
 let recentExterminatus = null;
+let recentConstruction = null;
 let threeView = null;
 let threeActive = false;
 let threeLoading = false;
 let showVectors = readPreference("vespator.vectors") !== "off";
+let indexCollapsed = readPreference("vespator.index") === "collapsed";
 
 function readPreference(name) {
   try { return localStorage.getItem(name); } catch { return null; }
@@ -62,13 +67,15 @@ function vector(tag, attributes = {}, text) {
   return node;
 }
 
+// "invert" layers are cut-outs painted in --emblem-bg (the roundel / card colour behind the glyph).
 function emblemGroup(key, size, attributes = {}) {
   const group = vector("g", { class: "emblem", ...attributes });
   const inner = vector("g", { transform: `scale(${size / 24})` });
   for (const layer of emblemLayers(key)) {
+    const ink = layer.invert ? "var(--emblem-bg, #030803)" : "currentColor";
     inner.append(vector("path", layer.mode === "fill"
-      ? { d: layer.d, fill: "currentColor", stroke: "none" }
-      : { d: layer.d, fill: "none", stroke: "currentColor", "stroke-width": 1.9, "stroke-linecap": "round", "stroke-linejoin": "round", "stroke-dasharray": layer.dash }));
+      ? { d: layer.d, style: `fill:${ink};stroke:none`, "fill-rule": layer.rule }
+      : { d: layer.d, style: `fill:none;stroke:${ink}`, "stroke-width": 1.9, "stroke-linecap": "round", "stroke-linejoin": "round", "stroke-dasharray": layer.dash }));
   }
   group.append(inner);
   return group;
@@ -78,6 +85,34 @@ function emblemIcon(key, size = 20, className = "emblem-icon") {
   const svg = vector("svg", { viewBox: "-12 -12 24 24", width: size, height: size, class: className, "aria-hidden": "true", focusable: "false" });
   svg.append(emblemGroup(key, 24));
   return svg;
+}
+
+// Official placard glyph: a filled phosphor-green roundel with the twist icon knocked out in black.
+function terrainRoundel(icon, radius, attributes = {}) {
+  const key = glyphKey(icon);
+  const group = vector("g", { class: "terrain-roundel", "data-glyph": key, ...attributes });
+  group.append(vector("circle", { r: radius, class: "roundel-disc" }), emblemGroup(key, radius * 2));
+  group.append(vector("title", {}, TERRAIN_GLYPHS[key].label));
+  return group;
+}
+
+function terrainBadge(icon, size) {
+  const svg = vector("svg", { viewBox: "-12 -12 24 24", width: size, height: size, class: "terrain-badge", "aria-hidden": "true", focusable: "false" });
+  svg.append(terrainRoundel(icon, 11.5));
+  return svg;
+}
+
+function shipIcon(fleet, size) {
+  const svg = vector("svg", { viewBox: "-13 -13 26 26", width: size, height: size, class: "ship-icon", "aria-hidden": "true", focusable: "false" });
+  svg.append(shipGlyph(fleet));
+  return svg;
+}
+
+function shipGlyph(fleet, rotation = 0) {
+  const kind = shipKey(fleet);
+  const group = vector("g", { class: `ship ship-${kind}`, "data-ship": kind, transform: `rotate(${rotation.toFixed(1)}) scale(${shipScale(fleet)})` });
+  group.append(vector("path", { d: shipPath(kind), class: "ship-hull" }), vector("path", { d: SHIP_SILHOUETTES[kind].detail, class: "ship-detail" }));
+  return group;
 }
 
 function report(message, error = false) {
@@ -104,10 +139,12 @@ function mutate(action, message) {
     dirty = true;
     render();
     report(message);
+    return true;
   } catch (error) {
     campaign = before;
     render();
     report(error.message, true);
+    return false;
   }
 }
 
@@ -203,7 +240,7 @@ function miniGauge(planet) {
 function renderIndex() {
   const query = $("search").value.trim().toLowerCase();
   const planets = campaign.planets.filter((planet) => [
-    planet.name, planet.subName, planet.id, planet.terrain, ...planet.terrainTraits,
+    planet.name, planet.subName, planet.id, planet.terrain, ...planet.terrainTwists,
     ...(planet.terrainIcons || []).map((icon) => TERRAIN_GLYPHS[glyphKey(icon)].label),
     ...planet.fleets.flatMap((fleet) => [fleetTitle(fleet), fleet.faction, fleet.alliance]),
     ...planet.infrastructure.slots.map(slotInfo).filter((slot) => !slot.empty).flatMap((slot) => [slot.type, slot.alliance]),
@@ -357,13 +394,13 @@ function renderTag(planet, rect) {
   card.append(vector("text", { x: TAG.card / 2, y: 20, class: "tag-name", "text-anchor": "middle" }, shorten(world, 16)));
   card.append(vector("text", { x: TAG.card / 2, y: 33, class: "tag-system", "text-anchor": "middle" }, shorten(system, 24)));
   card.append(vector("text", { x: TAG.card / 2, y: 46, class: `tag-terrain${planet.destroyed ? " danger" : ""}`, "text-anchor": "middle" }, planet.destroyed ? "⚠ EXTERMINATUS ENACTED" : shorten(planet.terrain.toUpperCase(), 30)));
-  const lead = dominantAlliance(planet);
-  ALLIANCES.forEach((alliance, index) => {
-    const cx = TAG.card / 2 + (index - 1) * 40;
-    const badge = vector("g", { class: `alliance-badge${lead === alliance ? " leading" : ""}`, style: `color:${color(alliance)}`, transform: `translate(${cx} 68)` });
-    badge.append(vector("circle", { r: 13 }), emblemGroup(ALLIANCE_EMBLEMS[alliance], 16), vector("title", {}, `${alliance} — Power Level ${planet.powerLevels[alliance]}${lead === alliance ? " (leading)" : ""}`));
-    card.append(badge);
+  const icons = planet.terrainIcons || [];
+  const spacing = icons.length > 2 ? 36 : 40;
+  const glyphs = vector("g", { class: "placard-glyphs", transform: "translate(0 68)" });
+  icons.forEach((icon, index) => {
+    glyphs.append(terrainRoundel(icon, 13, { transform: `translate(${TAG.card / 2 + (index - (icons.length - 1) / 2) * spacing} 0)` }));
   });
+  card.append(glyphs);
   tag.append(card, renderGauge(planet, TAG.card + 8, 0));
   return tag;
 }
@@ -377,6 +414,7 @@ function renderVectors() {
   const stack = new Map();
   const rings = new Map();
   const groups = activeVectors(campaign).map((assault) => {
+    if (isOrbitalStrike(assault)) return orbitalVector(assault, rings, labels);
     const from = pos(planetById(campaign, assault.from));
     const to = pos(planetById(campaign, assault.to));
     const length = Math.hypot(to.x - from.x, to.y - from.y);
@@ -431,6 +469,63 @@ function renderVectors() {
   return groups;
 }
 
+// Orbital strike (from === to): chevrons circle the orbit reticle clockwise, then dive onto the planetary core.
+function orbitalVector(assault, rings, labels) {
+  const planet = planetById(campaign, assault.from);
+  const p = pos(planet);
+  const ring = rings.get(planet.id) || 0;
+  rings.set(planet.id, ring + 1);
+  const r = 54 + ring * 9;
+  const at = (degrees, radius = r) => {
+    const a = degrees * Math.PI / 180;
+    return { x: p.x + Math.cos(a) * radius, y: p.y + Math.sin(a) * radius };
+  };
+  const start = at(-30);
+  const top = at(-90);
+  const strike = at(-90, 31);
+  const path = `M${start.x.toFixed(1)} ${start.y.toFixed(1)}A${r} ${r} 0 1 1 ${top.x.toFixed(1)} ${top.y.toFixed(1)}L${strike.x.toFixed(1)} ${strike.y.toFixed(1)}`;
+  const title = assaultTitle(campaign, assault);
+  const group = vector("g", {
+    class: "assault-vector orbital-strike", style: `color:${color(assault.alliance)}`, "data-from": planet.id, "data-to": planet.id, "data-alliance": assault.alliance, "data-orbital": "true",
+  });
+  group.append(
+    vector("title", {}, `${title}\n${assault.alliance}: orbital strike on ${planet.name}`),
+    vector("circle", { cx: p.x, cy: p.y, r: r - 7, class: "assault-reticle" }),
+    vector("path", { d: path, class: "vector-track orbital-track" }),
+  );
+  const duration = 3.6;
+  const count = 5;
+  for (let i = 0; i < count; i++) {
+    const chevron = vector("path", { d: "M-8-8L2 0-8 8M-1-8L9 0-1 8", class: "vector-chevron" });
+    if (reducedMotion.matches) {
+      const degrees = -30 + 300 * (i + 0.5) / count;
+      const point = at(degrees);
+      chevron.setAttribute("transform", `translate(${point.x} ${point.y}) rotate(${degrees + 90})`);
+    } else {
+      const begin = `${(-duration * i / count).toFixed(2)}s`;
+      chevron.setAttribute("opacity", "0");
+      chevron.append(
+        vector("animateMotion", { path, dur: `${duration}s`, begin, repeatCount: "indefinite", rotate: "auto" }),
+        vector("animate", { attributeName: "opacity", values: "0;1;1;0", keyTimes: "0;0.1;0.88;1", dur: `${duration}s`, begin, repeatCount: "indefinite" }),
+      );
+    }
+    group.append(chevron);
+  }
+  group.append(vector("path", { d: "M-10-11L8 0-10 11-5 0Z", class: "vector-head strike-head", transform: `translate(${strike.x} ${strike.y}) rotate(90)` }));
+  if (!reducedMotion.matches) {
+    const impact = vector("circle", { cx: p.x, cy: p.y, r: 8, class: "strike-impact" });
+    impact.append(
+      vector("animate", { attributeName: "r", values: "6;24", dur: "1.2s", repeatCount: "indefinite" }),
+      vector("animate", { attributeName: "opacity", values: ".9;0", dur: "1.2s", repeatCount: "indefinite" }),
+    );
+    group.append(impact);
+  }
+  labels.push(vector("text", {
+    x: p.x, y: p.y - r - 14, class: "vector-label", style: `color:${color(assault.alliance)}`, "text-anchor": "middle", "dominant-baseline": "middle",
+  }, `⊙ ${shorten(title.toUpperCase(), 26)}`));
+  return group;
+}
+
 function renderMap() {
   tagLayout = layoutTags();
   const title = $("map-title");
@@ -459,17 +554,21 @@ function renderMap() {
     const awayAngle = angle + Math.PI;
     planet.fleets.forEach((fleet, index) => {
       const spread = (index - (planet.fleets.length - 1) / 2) * 0.62;
-      const x = p.x + Math.cos(awayAngle + spread) * 66;
-      const y = p.y + Math.sin(awayAngle + spread) * 66;
+      const orbit = awayAngle + spread;
+      const x = p.x + Math.cos(orbit) * 66;
+      const y = p.y + Math.sin(orbit) * 66;
       const marker = vector("g", {
         transform: `translate(${x} ${y})`, class: `fleet-marker${warmaster && !planet.destroyed ? " draggable" : ""}`, style: `color:${color(fleet.alliance)}`,
-        "data-source": planet.id, "data-fleet": index, "data-x": x, "data-y": y, tabindex: "0", role: "button",
-        "aria-label": `${fleetTitle(fleet)}, ${fleet.faction} (${fleet.alliance}) in orbit of ${planet.name}${warmaster ? ". Drag to a linked world to transfer." : ""}`,
+        "data-source": planet.id, "data-fleet": index, "data-x": x, "data-y": y, "data-ship": shipKey(fleet), tabindex: "0", role: "button",
+        "aria-label": `${fleetTitle(fleet)}, ${fleet.faction} ${shipClass(fleet)} (${fleet.alliance}) in orbit of ${planet.name}${warmaster ? ". Drag to a linked world to transfer." : ""}`,
       });
+      const hull = vector("g", { transform: "scale(1.3)" });
+      hull.append(shipGlyph(fleet, (orbit * 180) / Math.PI + 180));
+      // The prow points along the clockwise orbital track.
       marker.append(
-        vector("title", {}, `${fleetTitle(fleet)} — ${fleet.faction} / ${fleet.alliance}${warmaster && !planet.destroyed ? "\nDrag along a warp lane to transfer" : ""}`),
-        vector("polygon", { points: "0,-15 13,-7.5 13,7.5 0,15 -13,7.5 -13,-7.5", class: "fleet-hull" }),
-        emblemGroup(fleetEmblem(fleet), 17),
+        vector("title", {}, `${fleetTitle(fleet)} — ${fleet.faction} ${shipClass(fleet)} / ${fleet.alliance}${warmaster && !planet.destroyed ? "\nDrag along a warp lane to transfer" : ""}`),
+        vector("circle", { r: 19, class: "fleet-halo" }),
+        hull,
       );
       marker.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectPlanet(planet.id); $("dossier").focus(); } });
       fleets.push(marker);
@@ -504,10 +603,46 @@ function renderNode(planet, p, tagAngle) {
     node.append(vector("circle", { r: 27, class: "ring" }), vector("circle", { r: 19, class: "ring inner" }), vector("circle", { r: 11, class: "core", style: lead ? `fill:${color(lead)}` : "" }));
   }
   if (recentExterminatus?.id === planet.id && Date.now() - recentExterminatus.time < 2000) node.append(vector("circle", { r: 30, class: "shockwave" }));
+  if (recentConstruction?.id === planet.id && Date.now() - recentConstruction.time < CONSTRUCTION_MS) node.append(constructionEffect(recentConstruction.alliance));
   node.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectPlanet(planet.id); $("dossier").focus(); }
   });
   return node;
+}
+
+const CONSTRUCTION_MS = 2600;
+const hexagon = (r) => Array.from({ length: 6 }, (_, i) => {
+  const a = Math.PI / 6 + i * Math.PI / 3;
+  return `${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}`;
+}).join(" ");
+
+// 2D construction: concentric hex wireframes pulse outward while a holographic blueprint line sweeps the world.
+function constructionEffect(alliance) {
+  const group = vector("g", { class: "construction", style: `color:${color(alliance)}`, "data-alliance": alliance, "aria-hidden": "true" });
+  const clip = `construct-clip-${Math.random().toString(36).slice(2, 8)}`;
+  const defs = vector("defs");
+  const clipPath = vector("clipPath", { id: clip });
+  clipPath.append(vector("polygon", { points: hexagon(46) }));
+  defs.append(clipPath);
+  group.append(defs, vector("polygon", { points: hexagon(46), class: "blueprint-frame" }));
+  const grid = vector("g", { class: "blueprint-grid", "clip-path": `url(#${clip})` });
+  for (let i = -40; i <= 40; i += 10) grid.append(vector("path", { d: `M${i}-46V46M-46 ${i}H46` }));
+  const scan = vector("g", { class: "blueprint-scan" });
+  scan.append(vector("rect", { x: -48, y: -2, width: 96, height: 4 }), vector("rect", { x: -48, y: -12, width: 96, height: 10, class: "scan-trail" }));
+  grid.append(scan);
+  group.append(grid);
+  for (let i = 0; i < 3; i++) group.append(vector("polygon", { points: hexagon(24), class: "construct-hex", style: `animation-delay:${i * 0.45}s` }));
+  group.append(vector("text", { y: 64, class: "construct-label", "text-anchor": "middle" }, "▲ CONSTRUCTING"));
+  return group;
+}
+
+function playConstruction(planetId, alliance) {
+  recentConstruction = { id: planetId, alliance, time: Date.now() };
+  renderMap();
+  if (threeActive) threeView?.construct?.(planetId, alliance);
+  setTimeout(() => {
+    if (recentConstruction?.id === planetId && Date.now() - recentConstruction.time >= CONSTRUCTION_MS) { recentConstruction = null; renderMap(); }
+  }, CONSTRUCTION_MS + 50);
 }
 
 function mapBounds() {
@@ -612,11 +747,30 @@ function infrastructureSection(planet) {
   section.append(grid);
   if (editable) {
     const hasEmpty = slots.includes("empty");
+    const lead = dominantAlliance(planet) || ALLIANCES[0];
     section.append(element("div", { class: "capacity-row" }, [
       element("span", { text: "SLOT CAPACITY" }),
       element("button", { type: "button", text: "−", "aria-label": "Remove an empty slot", disabled: !hasEmpty, onclick: () => mutate(() => setInfrastructureCapacity(campaign, planet.id, slots.length - 1), "Infrastructure capacity reduced.") }),
       element("strong", { text: String(slots.length) }),
-      element("button", { type: "button", text: "+", "aria-label": "Add an infrastructure slot", disabled: slots.length >= MAX_INFRASTRUCTURE, onclick: () => mutate(() => setInfrastructureCapacity(campaign, planet.id, slots.length + 1), "Infrastructure slot added.") }),
+      element("button", { type: "button", text: "+", "aria-label": "Add an infrastructure slot", disabled: slots.length >= MAX_INFRASTRUCTURE, onclick: () => {
+        if (mutate(() => setInfrastructureCapacity(campaign, planet.id, slots.length + 1), "Infrastructure slot surveyed and added.")) playConstruction(planet.id, lead);
+      } }),
+    ]));
+    const full = !hasEmpty && slots.length >= MAX_INFRASTRUCTURE;
+    const type = element("select", { "aria-label": "Infrastructure to construct" }, options(INFRASTRUCTURE_TYPES, INFRASTRUCTURE_TYPES[0]));
+    const owner = element("select", { "aria-label": "Constructing alliance" }, options(ALLIANCES, lead));
+    section.append(element("form", { class: "construct-form", onsubmit: (event) => {
+      event.preventDefault();
+      const alliance = owner.value;
+      const name = infrastructureType(type.value, alliance);
+      let index = -1;
+      if (mutate(() => { index = constructInfrastructure(campaign, planet.id, type.value, alliance); }, `${alliance} constructing ${name} on ${planet.name}.`)) {
+        playConstruction(planet.id, alliance);
+        report(`${alliance} constructed ${name} in slot ${pad(index + 1)} on ${planet.name}.`);
+      }
+    } }, [
+      element("label", { text: "CONSTRUCTION ORDERS" }), type, owner,
+      element("button", { type: "submit", class: "primary-button construct-button", text: "▲ CONSTRUCT INFRASTRUCTURE", disabled: full, title: full ? `All ${MAX_INFRASTRUCTURE} slots are built` : "Build in the first empty slot (adds a slot if none are free)" }),
     ]));
   }
   return section;
@@ -631,11 +785,11 @@ function fleetSection(planet) {
   const targets = neighbors(campaign, planet.id).filter((id) => canTransfer(campaign, planet.id, id)).map((id) => planetById(campaign, id));
   planet.fleets.forEach((fleet, index) => {
     const title = fleetTitle(fleet);
-    const card = element("div", { class: "fleet-card", style: allianceStyle(fleet.alliance) }, [
-      emblemIcon(fleetEmblem(fleet), 34, "fleet-emblem"),
+    const card = element("div", { class: "fleet-card", style: allianceStyle(fleet.alliance), "data-ship": shipKey(fleet) }, [
+      shipIcon(fleet, 38),
       element("div", { class: "fleet-text" }, [
         element("strong", { class: "fleet-name", text: title }),
-        element("span", { class: "fleet-faction", text: `${fleet.faction.toUpperCase()} · ${(EMBLEMS[fleetEmblem(fleet)]?.label || "Insignia").toUpperCase()}` }),
+        element("span", { class: "fleet-faction" }, [emblemIcon(fleetEmblem(fleet), 13), document.createTextNode(` ${fleet.faction.toUpperCase()} · ${shipClass(fleet).toUpperCase()}`)]),
         element("span", { class: "alliance-pill", style: allianceStyle(fleet.alliance) }, [emblemIcon(ALLIANCE_EMBLEMS[fleet.alliance], 12), document.createTextNode(` ${fleet.alliance.toUpperCase()}`)]),
         element("small", { text: planet.destroyed ? "STRANDED / WORLD DESTROYED" : "IN ORBIT / AWAITING ORDERS" }),
       ]),
@@ -675,13 +829,14 @@ function assaultSection(planet) {
   if (!entries.length) section.append(element("p", { class: "empty-message", text: "No assaults launched from or against this world." }));
   for (const { assault, index } of entries) {
     const outgoing = assault.from === planet.id;
+    const orbital = isOrbitalStrike(assault);
     const other = planetById(campaign, outgoing ? assault.to : assault.from);
     const title = assaultTitle(campaign, assault);
-    const card = element("div", { class: `assault-card${live.has(assault) ? "" : " suspended"}`, style: allianceStyle(assault.alliance) }, [
-      element("span", { class: "assault-arrow", "aria-hidden": "true", text: outgoing ? "⟶" : "⟵" }),
+    const card = element("div", { class: `assault-card${orbital ? " orbital" : ""}${live.has(assault) ? "" : " suspended"}`, style: allianceStyle(assault.alliance) }, [
+      element("span", { class: "assault-arrow", "aria-hidden": "true", text: orbital ? "⊙" : outgoing ? "⟶" : "⟵" }),
       element("div", { class: "assault-text" }, [
         element("strong", { text: title }),
-        element("span", { text: `${outgoing ? "OUTBOUND → " : "INBOUND ← "}${planetNames(other).world.toUpperCase()}` }),
+        element("span", { text: orbital ? "ORBITAL STRIKE ↓ PLANETARY SURFACE" : `${outgoing ? "OUTBOUND → " : "INBOUND ← "}${planetNames(other).world.toUpperCase()}` }),
         element("span", { class: "alliance-pill", style: allianceStyle(assault.alliance) }, [emblemIcon(ALLIANCE_EMBLEMS[assault.alliance], 12), document.createTextNode(` ${assault.alliance.toUpperCase()}`)]),
         live.has(assault) ? null : element("small", { text: "SUSPENDED / WORLD DESTROYED" }),
       ]),
@@ -696,7 +851,7 @@ function assaultSection(planet) {
     const lead = dominantAlliance(planet) || planet.fleets[0]?.alliance || ALLIANCES[0];
     const alliance = element("select", { "aria-label": "Attacking alliance" }, ALLIANCES.map((name) => element("option", { value: name, text: name, selected: name === lead })));
     const target = element("select", { "aria-label": "Assault target", disabled: !targets.length }, targets.length
-      ? targets.map((world) => element("option", { value: world.id, text: `→ ${world.name}` }))
+      ? targets.map((world) => element("option", { value: world.id, text: world.id === planet.id ? `⊙ ORBITAL STRIKE: ${world.name}` : `→ ${world.name}` }))
       : [element("option", { text: "No open warp lanes" })]);
     const label = element("input", { type: "text", maxlength: "80", placeholder: "Operation designation (optional)", "aria-label": "Assault designation" });
     section.append(element("form", { class: "assault-form", onsubmit: (event) => {
@@ -704,7 +859,8 @@ function assaultSection(planet) {
       if (!targets.length) return;
       const world = planetById(campaign, target.value);
       if (!showVectors) { showVectors = true; writePreference("vespator.vectors", "on"); }
-      mutate(() => launchAssault(campaign, planet.id, target.value, alliance.value, label.value), `${alliance.value} assault launched: ${planet.name} → ${world.name}.`);
+      const message = world.id === planet.id ? `${alliance.value} orbital strike launched on ${world.name}.` : `${alliance.value} assault launched: ${planet.name} → ${world.name}.`;
+      mutate(() => launchAssault(campaign, planet.id, target.value, alliance.value, label.value), message);
     } }, [
       element("label", { text: "LAUNCH ASSAULT" }), alliance, target, label,
       element("button", { type: "submit", class: "primary-button assault-button", text: "⚔ LAUNCH ASSAULT", disabled: !targets.length }),
@@ -733,18 +889,20 @@ function renderDossier() {
       element("dt", { text: "CONTROL SIGNAL" }), element("dd", { class: "signal", text: planet.destroyed ? "☢ WORLD DESTROYED" : lead ? `${lead.toUpperCase()} DOMINANT` : "CONTESTED" }),
     ]),
   ]));
+  const twists = planet.terrainTwists || [];
   content.append(element("section", { class: "dossier-section" }, [
-    element("div", { class: "section-title" }, [element("h2", { text: "TERRAIN PROFILE" }), element("small", { text: `${planet.terrainTraits.length} TWIST${planet.terrainTraits.length === 1 ? "" : "S"} ACTIVE` })]),
+    element("div", { class: "section-title" }, [element("h2", { text: "TERRAIN PROFILE" }), element("small", { text: `${twists.length} TWIST${twists.length === 1 ? "" : "S"} ACTIVE` })]),
     element("p", { class: "terrain-class" }, [element("span", { text: "CLASSIFICATION //" }), element("strong", { text: ` ${planet.terrain.toUpperCase()}` })]),
-    terrainCategory(planet) ? element("p", { class: "terrain-class" }, [element("span", { text: "CRUSADE TERRAIN //" }), element("strong", { class: "terrain-category", text: ` ${terrainCategory(planet).toUpperCase()}` })]) : null,
-    icons.length ? element("div", { class: "terrain-glyphs", role: "list", "aria-label": "Terrain glyphs" }, icons.map((icon) => {
-      const glyph = TERRAIN_GLYPHS[glyphKey(icon)];
-      return element("span", { class: "terrain-glyph", role: "listitem", title: `${glyph.label} (${icon})`, style: `--glyph:${theme.glow}` }, [
-        emblemIcon(glyphKey(icon), 30, "glyph-icon"), element("small", { text: glyph.label.toUpperCase() }),
-      ]);
-    })) : null,
-    element("h3", { class: "subheading", text: "ACTIVE TERRAIN RULES / TWISTS" }),
-    element("ul", { class: "trait-list" }, planet.terrainTraits.length ? planet.terrainTraits.map((trait) => element("li", { text: trait })) : [element("li", { class: "muted", text: "No terrain twists recorded." })]),
+    element("h3", { class: "subheading", text: "ACTIVE TERRAIN TWISTS" }),
+    twists.length
+      ? element("ul", { class: "twist-list", "aria-label": "Active terrain twists" }, twists.map((twist, index) => {
+        const icon = icons[index] || twistKey(twist);
+        return element("li", { class: "twist", "data-glyph": glyphKey(icon) }, [
+          terrainBadge(icon, 34),
+          element("div", { class: "twist-text" }, [element("strong", { text: twist.toUpperCase() }), element("small", { text: `TWIST ${pad(index + 1)} · GLYPH ${glyphKey(icon).toUpperCase()}` })]),
+        ]);
+      }))
+      : element("p", { class: "empty-message", text: "No terrain twists recorded." }),
   ]));
   content.append(element("section", { class: "dossier-section" }, [
     element("div", { class: "section-title" }, [element("h2", { text: "ALLIANCE POWER LEVELS" }), element("small", { text: `RANGE ${MIN_POWER}–${MAX_POWER}` })]),
@@ -1056,7 +1214,7 @@ async function fetchCampaign() {
   return data;
 }
 
-const twistNote = () => lastSynced ? ` Official terrain twists applied to ${lastSynced} world${lastSynced === 1 ? "" : "s"}; export to persist.` : "";
+const twistNote = () => lastSynced ? ` Legacy terrain migrated to official twists on ${lastSynced} world${lastSynced === 1 ? "" : "s"}; export to persist.` : "";
 
 function setVectors(visible) {
   showVectors = visible;
@@ -1069,6 +1227,23 @@ function setVectors(visible) {
 }
 
 $("vector-toggle").addEventListener("click", () => { if (campaign) setVectors(!showVectors); });
+
+// Collapsing the index widens the map column; refit once the grid has reflowed so the theatre isn't stretched.
+function applyIndexCollapse(announce = false) {
+  document.body.classList.toggle("index-collapsed", indexCollapsed);
+  const button = $("index-toggle");
+  button.setAttribute("aria-expanded", String(!indexCollapsed));
+  button.querySelector(".idx-hide").classList.toggle("active", !indexCollapsed);
+  button.querySelector(".idx-show").classList.toggle("active", indexCollapsed);
+  $("theatre-index").inert = indexCollapsed;
+  if (!announce) return;
+  writePreference("vespator.index", indexCollapsed ? "collapsed" : "open");
+  requestAnimationFrame(() => requestAnimationFrame(() => { if (campaign) fitMap(); }));
+  report(indexCollapsed ? "Theatre Index collapsed: tactical display widened." : "Theatre Index restored.");
+}
+
+$("index-toggle").addEventListener("click", () => { indexCollapsed = !indexCollapsed; applyIndexCollapse(true); });
+applyIndexCollapse();
 
 $("reload-feed").addEventListener("click", async () => {
   if (!campaign) return;

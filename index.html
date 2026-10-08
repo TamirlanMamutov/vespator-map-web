@@ -13,6 +13,9 @@
 <body>
   <div class="crt" aria-hidden="true"></div>
   <header class="hud">
+    <button id="index-toggle" class="view-toggle index-toggle" type="button" aria-controls="theatre-index" aria-expanded="true" title="Collapse or expand the Theatre Index panel">
+      <span aria-hidden="true">[</span> <span class="idx-hide active">◀ HIDE INDEX</span> <span aria-hidden="true">/</span> <span class="idx-show">▶ SHOW INDEX</span> <span aria-hidden="true">]</span>
+    </button>
     <div class="brand"><span class="seal" aria-hidden="true">⛭</span><span><small>DEPARTMENTO MUNITORUM // CRUSADE COMMAND</small><strong>WAR ON THE VESPATOR FRONT</strong></span></div>
     <button id="view-toggle" class="view-toggle" type="button" aria-pressed="false" title="Switch between the 2D tactical map and the 3D cogitator projection">
       <span aria-hidden="true">[</span> <span class="mode-2d active">TACTICAL 2D</span> <span aria-hidden="true">/</span> <span class="mode-3d">COGITATOR 3D</span> <span aria-hidden="true">]</span>
@@ -31,7 +34,7 @@
     <div id="dominance" class="dominance" aria-label="Theatre-wide alliance Power Level totals"></div>
   </section>
   <main class="workspace">
-    <aside class="theatre panel" aria-label="Theatre index">
+    <aside id="theatre-index" class="theatre panel" aria-label="Theatre index">
       <div class="panel-heading"><h2>THEATRE INDEX</h2><span id="world-count">00</span></div>
       <label class="search-field"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search world, terrain, faction, fleet…" aria-label="Search worlds"></label>
       <div class="index-label"><span>SYSTEM</span><span title="Imperium / Xenos / Chaos Power Levels">I · X · C</span></div>

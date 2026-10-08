@@ -89,147 +89,105 @@ const radial = (count, build, rotation = -Math.PI / 2) => {
 };
 const circle = (cx, cy, r) => `M${cx - r} ${cy}A${r} ${r} 0 1 0 ${cx + r} ${cy}A${r} ${r} 0 1 0 ${cx - r} ${cy}`;
 
-// Terrain glyph keys match the "terrainIcons" values in campaign_data.json.
+// The nine official Vespator Front terrain twist glyphs. Keys match "terrainIcons" in campaign_data.json.
+// Artwork stays inside a radius of ~8.5 so it sits cleanly inside the filled green placard roundel.
 export const TERRAIN_GLYPHS = {
-  radiation: { label: "Radiation", layers: [
-    { d: circle(0, 0, 1.9), mode: "fill" },
-    { d: radial(3, (p) => `M${p(3.4, -0.5)}L${p(10.5, -0.5)}A10.5 10.5 0 0 1 ${p(10.5, 0.5)}L${p(3.4, 0.5)}A3.4 3.4 0 0 0 ${p(3.4, -0.5)}Z`), mode: "fill" },
+  spaceport: { label: "Spaceport", layers: [
+    { d: "M0-9C2.4-6.6 2.8-3 2.8 1.6H-2.8C-2.8-3-2.4-6.6 0-9Z", mode: "fill" },
+    { d: "M-2.8-.4L-5.4 3.4V5.4L-2.8 3.6ZM2.8-.4L5.4 3.4V5.4L2.8 3.6Z", mode: "fill" },
+    { d: "M-1.6 3.6L0 6.6 1.6 3.6M-8 8.4H8", mode: "stroke" },
   ] },
-  spire: { label: "Hive Spire", layers: [
-    { d: "M0-11L3-3V10H-3V-3Z", mode: "stroke" },
-    { d: "M-8 10V1L-5-1V10M8 10V1L5-1V10M-11 10H11", mode: "stroke" },
+  desolate_wastes: { label: "Desolate Wastes", layers: [
+    { d: circle(3.6, -4.4, 2.6), mode: "fill" },
+    { d: "M-8.4 1.6C-5.6-1.2-3.2-1.2-.4 1.6S4.8 4.4 8.4 1.6M-8.4 6.2C-5.6 3.4-3.2 3.4-.4 6.2S4.8 9 8.4 6.2", mode: "stroke" },
   ] },
-  hazard: { label: "Hazard Zone", layers: [
-    { d: "M0-10L10.5 8.5H-10.5Z", mode: "stroke" },
-    { d: "M0-3.5V3M0 5.6V6", mode: "stroke" },
+  xenoflora_jungle: { label: "Xenoflora Jungle", layers: [
+    { d: "M0 8.6V-1.4", mode: "stroke" },
+    { d: "M0-1.4C-1.6-6.8-6.4-8.6-8.4-6.4C-6.6-3.2-3.4-1.8 0-1.4ZM0-1.4C1.6-6.8 6.4-8.6 8.4-6.4C6.6-3.2 3.4-1.8 0-1.4ZM0 3C-2.4-.4-6.2 0-7.4 2.4C-5.2 4.4-2.4 4.4 0 3ZM0 3C2.4-.4 6.2 0 7.4 2.4C5.2 4.4 2.4 4.4 0 3Z", mode: "fill" },
   ] },
-  cog: { label: "Mechanicus Cog", layers: [
-    { d: radial(8, (p) => `M${p(6.6, -0.2)}L${p(10.4, -0.13)}L${p(10.4, 0.13)}L${p(6.6, 0.2)}`), mode: "stroke" },
-    { d: circle(0, 0, 6.6), mode: "stroke" },
-    { d: circle(0, 0, 2.6), mode: "fill" },
-  ] },
-  chimney: { label: "Manufactorum Stacks", layers: [
-    { d: "M-10 10V0L-4 4V0L2 4V-5H7V10Z", mode: "stroke" },
-    { d: `${circle(4.5, -8.4, 1.7)}${circle(7.6, -10.4, 1.2)}`, mode: "fill" },
-  ] },
-  waste: { label: "Toxic Waste", layers: [
-    { d: "M-6-9H5V9H-6Z", mode: "stroke" },
-    { d: "M-6-4H5M-6 4H5", mode: "stroke" },
-    { d: "M8.6 1.6C10.4 4.6 10.4 7 8.6 7S6.8 4.6 8.6 1.6Z", mode: "fill" },
-  ] },
-  pine: { label: "Pine Forest", layers: [
-    { d: "M0-11L-5.5-3.5H-2.5L-8 3.5H-3L-9 9.5H9L3 3.5H8L2.5-3.5H5.5Z", mode: "stroke" },
-    { d: "M0 9.5V12", mode: "stroke" },
-  ] },
-  dense_roots: { label: "Dense Roots", layers: [
-    { d: "M0-11V0M-4-11C-4-6-1-5 0 0M4-11C4-6 1-5 0 0", mode: "stroke" },
-    { d: "M0 0C-2 4-6 4-9.5 9.5M0 0C2 4 6 4 9.5 9.5M0 0V10.5M-4.5 3.4C-6 6-3 8-4.5 10.5M4.5 3.4C6 6 3 8 4.5 10.5", mode: "stroke" },
-  ] },
-  glacier: { label: "Glacier", layers: [
-    { d: "M-11 9L-4.5-5-1 1 3.5-9 11 9Z", mode: "stroke" },
-    { d: "M-4.5-5L-2.6-.8-5.4-2M3.5-9L5.8-3.6 2.8-4.6", mode: "stroke" },
-    { d: "M-11 9H11", mode: "stroke" },
-  ] },
-  blizzard: { label: "Blizzard", layers: [
-    { d: radial(6, (p) => `M0 0L${p(10.5)}M${p(6.4)}L${p(9.4, 0.32)}M${p(6.4)}L${p(9.4, -0.32)}`), mode: "stroke" },
-  ] },
-  grain: { label: "Grain Fields", layers: [
-    { d: "M0 11V-11", mode: "stroke" },
-    { d: [-8, -3.5, 1].map((y) => `M0 ${y + 3}C-1.4 ${y}-4.6 ${y - 0.6}-5.6 ${y - 2.6}C-3 ${y - 2.6}-0.6 ${y - 0.6} 0 ${y + 3}ZM0 ${y + 3}C1.4 ${y} 4.6 ${y - 0.6} 5.6 ${y - 2.6}C3 ${y - 2.6} 0.6 ${y - 0.6} 0 ${y + 3}Z`).join(""), mode: "fill" },
-  ] },
-  flora: { label: "Xenoflora", layers: [
-    { d: radial(5, (p) => `M${p(1.6)}C${p(6, -0.55)} ${p(11, -0.25)} ${p(10.4)}C${p(11, 0.25)} ${p(6, 0.55)} ${p(1.6)}`), mode: "stroke" },
-    { d: circle(0, 0, 2.2), mode: "fill" },
-  ] },
-  coffin: { label: "Catacombs", layers: [
-    { d: "M-4-11H4L7.5-5 4 11H-4L-7.5-5Z", mode: "stroke" },
-    { d: "M0-6V4.5M-3.4-2.6H3.4", mode: "stroke" },
-  ] },
-  aeldari_rune: { label: "Webway Rune", layers: EMBLEMS.aeldariRune.layers },
-  chaos_eye: { label: "Eye of Chaos", layers: [
-    { d: "M-11.5 0C-5.5-8.4 5.5-8.4 11.5 0C5.5 8.4-5.5 8.4-11.5 0Z", mode: "stroke" },
-    { d: "M0-5.6C2.4-2.2 2.4 2.2 0 5.6C-2.4 2.2-2.4-2.2 0-5.6Z", mode: "fill" },
-  ] },
-  warp_rift: { label: "Warp Rift", layers: [
-    { d: "M-1.5-11.5L2.5-5.5-3-1.5 3 3-1.5 7.5 1 11.5", mode: "stroke" },
-    { d: "M-9.5-2A9.5 9.5 0 0 1-3-9.2M9.5 2A9.5 9.5 0 0 1 3 9.2M-7.5 5A8 8 0 0 1-8.4-1M7.5-5A8 8 0 0 1 8.4 1", mode: "stroke" },
-  ] },
-  palm: { label: "Jungle Canopy", layers: [
-    { d: "M1 11.5C1 5 1.6-1.4-.6-5", mode: "stroke" },
-    { d: "M-.6-5C-5.6-9.4-9.6-6.4-11-2.6M-.6-5C-3.4-11.2 2.4-12 4.6-9.6M-.6-5C4.4-8 9-6.2 10.4-2M-.6-5C-3-3-6.2 0-6.2 3.4", mode: "stroke" },
-  ] },
-  spore: { label: "Spore Cloud", layers: [
-    { d: circle(0, 0, 4.6), mode: "stroke" },
-    { d: radial(8, (p) => `M${p(6.2)}L${p(8.6)}`, 0), mode: "stroke" },
-    { d: radial(8, (p) => circle(...p(10.6, Math.PI / 8).split(" ").map(Number), 1.1), 0), mode: "fill" },
+  rad_zone: { label: "Rad Zone", layers: [
     { d: circle(0, 0, 1.6), mode: "fill" },
+    { d: radial(3, (p) => `M${p(2.8, -0.5)}L${p(8.6, -0.5)}A8.6 8.6 0 0 1 ${p(8.6, 0.5)}L${p(2.8, 0.5)}A2.8 2.8 0 0 0 ${p(2.8, -0.5)}Z`), mode: "fill" },
   ] },
-  necron_glyph: { label: "Necron Glyph", layers: [
-    { d: "M-7-10H7M0-10V2M-8 10H8M0 6V10", mode: "stroke" },
-    { d: "M-5-5L0 2 5-5", mode: "stroke" },
-    { d: circle(0, 4.2, 2), mode: "fill" },
+  forge_complex: { label: "Forge Complex", layers: [
+    { d: radial(8, (p) => `M${p(5.2, -0.22)}L${p(8.4, -0.14)}L${p(8.4, 0.14)}L${p(5.2, 0.22)}Z`), mode: "fill" },
+    { d: `${circle(0, 0, 5.6)}${circle(0, 0, 2.2)}`, mode: "fill", rule: "evenodd" },
   ] },
-  gauss_ring: { label: "Gauss Arc Pylon", layers: [
-    { d: `${circle(0, 0, 10.4)}${circle(0, 0, 6)}`, mode: "stroke" },
-    { d: "M1.2-4.2L-2.4 .6H1L-1.6 4.4", mode: "stroke" },
+  hab_sprawl: { label: "Hab Sprawl", layers: [
+    { d: "M-8.4 8.4V-1.4H-4.4V8.4ZM-3.2 8.4V-7.8H1.6V8.4ZM2.8 8.4V-3.6H8.4V8.4Z", mode: "fill" },
+    { d: "M-1.6-5V-3.6M0-5V-3.6M-1.6-1.2V.2M0-1.2V.2M-1.6 2.6V4M0 2.6V4M4.4-1.2H6.8M4.4 1.6H6.8M4.4 4.4H6.8M-7.2 1.6H-5.6M-7.2 4.4H-5.6", mode: "stroke", invert: true },
   ] },
-  toxic_bio: { label: "Bio-Toxin", layers: [
-    { d: radial(3, (p) => circle(...p(4.6).split(" ").map(Number), 5)), mode: "stroke" },
-    { d: circle(0, 0, 1.8), mode: "fill" },
+  delvesite_facility: { label: "Delvesite Facility", layers: [
+    { d: "M-6.4 4.4L0-8.4 6.4 4.4M-3.8-.8H3.8M-8.4 4.4H8.4", mode: "stroke" },
+    { d: "M-1.8 4.4H1.8V6.4L0 9 -1.8 6.4Z", mode: "fill" },
+    { d: circle(0, -8.4, 1.4), mode: "fill" },
   ] },
-  monolith: { label: "Monolith Ruins", layers: [
-    { d: "M-6 11L-4.4-8.6 0-11 4.4-8.6 6 11Z", mode: "stroke" },
-    { d: "M-2-3.4H2V1.6H-2Z", mode: "fill" },
-    { d: "M-11 11H11", mode: "stroke" },
+  dead_lands: { label: "Dead Lands", layers: [
+    { d: "M0-8.6C-4.8-8.6-7-5.2-7-1.8C-7 1.2-5.6 2.6-4 3.4V6.4H4V3.4C5.6 2.6 7 1.2 7-1.8C7-5.2 4.8-8.6 0-8.6Z", mode: "fill" },
+    { d: `${circle(-3, -1.8, 1.8)}${circle(3, -1.8, 1.8)}M0 .6L-1 2.6H1Z`, mode: "fill", invert: true },
+    { d: "M-2.2 6.4V8.6M0 6.4V8.6M2.2 6.4V8.6", mode: "stroke" },
   ] },
-  sun: { label: "Scorching Sun", layers: [
-    { d: circle(0, 0, 4.6), mode: "stroke" },
-    { d: radial(8, (p) => `M${p(7)}L${p(10.8)}`), mode: "stroke" },
-  ] },
-  dead_tree: { label: "Dead Wastes", layers: [
-    { d: "M0 11V-2M0 2L-6-4.6M-3.4-.6L-5.2-8.6M0-2L5-7.4M3-4.2L8.4-5.6M2.2-5.8L1-11", mode: "stroke" },
-    { d: "M-8 11H8", mode: "stroke" },
-  ] },
-  space_elevator: { label: "Space Elevator", layers: [
-    { d: "M0-11.5V11.5M-2.4-11.5H2.4", mode: "stroke" },
-    { d: "M-7.5-6.5H7.5V-3H-7.5Z", mode: "stroke" },
-    { d: "M-9 11.5L-3.4 6.4H3.4L9 11.5M-4 2H4", mode: "stroke" },
-  ] },
-  gantry: { label: "Void Gantry", layers: [
-    { d: "M-7 11.5V-9M-10 11.5H-4M-7-9H9.5M-7-4.6L-2.6-9M7.6-9V-3", mode: "stroke" },
-    { d: "M5.4-3H9.8V.8H5.4Z", mode: "fill" },
-    { d: "M-7 2L-3.4-2M-7 7L-3.4 3", mode: "stroke" },
-  ] },
-  caldera: { label: "Magma Caldera", layers: [
-    { d: "M-11.5 10L-4.4-3H4.4L11.5 10Z", mode: "stroke" },
-    { d: "M-4.4-3C-2.2-.4 2.2-.4 4.4-3Z", mode: "fill" },
-    { d: "M0-5.4C-2.2-8 2-9 0-11.5", mode: "stroke" },
-  ] },
-  magma: { label: "Magma Flow", layers: [
-    { d: "M0-11.5C5-4.6 8-.4 8 3.6A8 8 0 0 1-8 3.6C-8-.4-5-4.6 0-11.5Z", mode: "stroke" },
-    { d: "M0-2C3 1.6 3 6 0 7.4-3 6-3 1.6 0-2Z", mode: "fill" },
-  ] },
-  peak: { label: "Mountain Peaks", layers: [
-    { d: "M-11.5 9.5L-5-3-1.2 3.2 4-8 11.5 9.5Z", mode: "stroke" },
-    { d: "M4-8L6.4-3.4 4.2-4.6 2-3.2Z", mode: "fill" },
-  ] },
-  bastion: { label: "Fortress Bastion", layers: EMBLEMS.stronghold.layers },
-  trench: { label: "Trench Lines", layers: [
-    { d: "M-11.5-1H-5.5V5H5.5V-1H11.5", mode: "stroke" },
-    { d: "M-11.5 9.5H11.5", mode: "stroke" },
-    { d: "M-10.5-7.5L-8.4-5.4-6.3-7.5-4.2-5.4-2.1-7.5 0-5.4 2.1-7.5 4.2-5.4 6.3-7.5 8.4-5.4 10.5-7.5", mode: "stroke" },
-  ] },
-  rad_shield: { label: "Void Shield", layers: [
-    { d: "M0-11.5L9.5-7.5V0C9.5 6.2 4.4 9.6 0 11.5-4.4 9.6-9.5 6.2-9.5 0V-7.5Z", mode: "stroke" },
-    { d: "M-5 0A5 5 0 0 1 5 0M-3 3.4A3.6 3.6 0 0 1 3 3.4", mode: "stroke" },
-    { d: circle(0, 0, 1.3), mode: "fill" },
+  tomb_complex: { label: "Tomb Complex", layers: [
+    { d: "M-8.6 8L0-8.6 8.6 8Z", mode: "fill" },
+    { d: "M-4.4 0H4.4M-6.4 4H6.4M0-4.4V-2", mode: "stroke", invert: true },
+    { d: circle(0, -3.4, 0.4), mode: "stroke", invert: true },
   ] },
   unknown: { label: "Unclassified Terrain", layers: [
-    { d: "M0-10L10 0 0 10-10 0Z", mode: "stroke" },
-    { d: "M-2.6-2.6C-2.6-5.6 2.6-5.6 2.6-2.6S0-.4 0 2.2M0 4.6V5.2", mode: "stroke" },
+    { d: "M0-8L8 0 0 8-8 0Z", mode: "stroke" },
+    { d: "M-2.2-2.2C-2.2-4.6 2.2-4.6 2.2-2.2S0-.4 0 1.8M0 4V4.6", mode: "stroke" },
   ] },
 };
 
+// Ship silhouettes point their prow up (toward -y) inside the 24-unit box. "hull" is a closed polygon reused
+// as an extruded THREE.Shape in 3D; "detail" is stroked over it as engraved hull lines.
+export const SHIP_SILHOUETTES = {
+  imperium: { label: "Gothic Prow-Ram Cruiser", hull: [
+    [0, -12], [1.6, -9.6], [2.4, -6.8], [3.2, -6.8], [3.2, -3], [6.4, -1.4], [6.4, 3.6], [4.4, 5.2], [5.6, 10], [2.4, 8.6],
+    [1.2, 11], [-1.2, 11], [-2.4, 8.6], [-5.6, 10], [-4.4, 5.2], [-6.4, 3.6], [-6.4, -1.4], [-3.2, -3], [-3.2, -6.8], [-2.4, -6.8], [-1.6, -9.6],
+  ], detail: "M0-6V6M-3.6 1.2H3.6M-1.6 3.6L0 1.4 1.6 3.6" },
+  chaos: { label: "Spiked Slaughter Cruiser", hull: [
+    [0, -12], [1.6, -7], [6.8, -10], [4.6, -3.6], [11, -2.4], [5, 1], [9, 6.4], [3.8, 4.8], [3.2, 10.4], [1, 7.4], [0, 11],
+    [-1, 7.4], [-3.2, 10.4], [-3.8, 4.8], [-9, 6.4], [-5, 1], [-11, -2.4], [-4.6, -3.6], [-6.8, -10], [-1.6, -7],
+  ], detail: "M0-7V5M-2.6-1.4L0 1 2.6-1.4" },
+  necron: { label: "Crescent Scythe Raider", hull: [
+    ...Array.from({ length: 9 }, (_, i) => { const a = (10 + i * 20) * Math.PI / 180; return [+(Math.cos(a) * 11).toFixed(2), +(Math.sin(a) * 11 - 3).toFixed(2)]; }),
+    [-11.4, -10],
+    ...Array.from({ length: 9 }, (_, i) => { const a = (170 - i * 20) * Math.PI / 180; return [+(Math.cos(a) * 9.6).toFixed(2), +(Math.sin(a) * 9.6 - 6.4).toFixed(2)]; }),
+    [11.4, -10],
+  ], detail: "M0 3.2V7.4M-4.8 1.6L-6 4.8M4.8 1.6L6 4.8" },
+  aeldari: { label: "Solar-Sail Crescent Blade", hull: [
+    [0, -12], [1.6, -5.4], [3, -6.4], [7.6, -10], [10.4, -6], [10, 0.6], [7, 5.2], [2.2, 4.4], [1.4, 8.4], [0, 11.4],
+    [-1.4, 8.4], [-3.2, 6.4], [-1.8, 1.2], [-1.6, -5.4],
+  ], detail: "M2.4-3.4L8.2-7.4M2.4 0L9.4-2.4M2.4 3L7.6 3.2" },
+};
+
+export const SHIP_BADGES = {
+  imperial_cruiser: { ship: "imperium", label: "Imperial Cruiser" },
+  imperial_battleship: { ship: "imperium", label: "Imperial Battleship", scale: 1.2 },
+  chaos_grand_cruiser: { ship: "chaos", label: "Chaos Grand Cruiser", scale: 1.1 },
+  necron_scythe: { ship: "necron", label: "Necron Scythe" },
+  aeldari_cruiser: { ship: "aeldari", label: "Aeldari Cruiser" },
+};
+
+const FACTION_SHIPS = { "Imperial Guard": "imperium", "Imperial Knights": "imperium", "Thousand Sons": "chaos", "Death Guard": "chaos", Necrons: "necron", Aeldari: "aeldari" };
+const ALLIANCE_SHIPS = { Imperium: "imperium", Xenos: "necron", Chaos: "chaos" };
+
+export function shipKey(fleet) {
+  return FACTION_SHIPS[fleet.faction] || SHIP_BADGES[fleet.badge]?.ship || ALLIANCE_SHIPS[fleet.alliance] || "imperium";
+}
+
+export function shipScale(fleet) {
+  return SHIP_BADGES[fleet.badge]?.scale || 1;
+}
+
+export function shipClass(fleet) {
+  return SHIP_BADGES[fleet.badge]?.label || SHIP_SILHOUETTES[shipKey(fleet)].label;
+}
+
+export function shipPath(key) {
+  const ship = SHIP_SILHOUETTES[key] || SHIP_SILHOUETTES.imperium;
+  return `M${ship.hull.map(([x, y]) => `${x} ${y}`).join("L")}Z`;
+}
 export function glyphKey(icon) {
   return TERRAIN_GLYPHS[icon] ? icon : "unknown";
 }
@@ -259,7 +217,7 @@ export const INFRASTRUCTURE_EMBLEMS = {
   Empty: "empty",
 };
 
-// Fleet "badge" keys from campaign_data.json.
+// Fleet "badge" keys from campaign_data.json. Ship-class badges show the fleet's faction insignia.
 export const BADGE_EMBLEMS = {
   imperial_aquila: "aquila",
   knight_helm: "knightHelm",
@@ -267,6 +225,11 @@ export const BADGE_EMBLEMS = {
   craftworld_rune: "aeldariRune",
   chaos_star: "chaosStar",
   nurgle_fly: "nurgleFly",
+  imperial_cruiser: "aquila",
+  imperial_battleship: "aquila",
+  chaos_grand_cruiser: "chaosStar",
+  necron_scythe: "necronAnkh",
+  aeldari_cruiser: "aeldariRune",
 };
 
 export function factionEmblem(faction, alliance) {
@@ -274,23 +237,25 @@ export function factionEmblem(faction, alliance) {
 }
 
 export function fleetEmblem(fleet) {
+  if (SHIP_BADGES[fleet.badge] && FACTION_EMBLEMS[fleet.faction]) return FACTION_EMBLEMS[fleet.faction];
   return BADGE_EMBLEMS[fleet.badge] || factionEmblem(fleet.faction, fleet.alliance);
 }
 
-export function drawEmblem(context, key, x, y, size, color, lineWidth = 1.8) {
+export function drawEmblem(context, key, x, y, size, color, lineWidth = 1.8, background = "#030803") {
   const emblem = { layers: emblemLayers(key) };
   context.save();
   context.translate(x, y);
   context.scale(size / 24, size / 24);
-  context.fillStyle = color;
-  context.strokeStyle = color;
   context.lineWidth = lineWidth;
   context.lineJoin = "round";
   context.lineCap = "round";
   for (const layer of emblem.layers) {
     const path = new Path2D(layer.d);
+    const ink = layer.invert ? background : color;
+    context.fillStyle = ink;
+    context.strokeStyle = ink;
     context.setLineDash(layer.dash ? layer.dash.split(" ").map(Number) : []);
-    if (layer.mode === "fill") context.fill(path);
+    if (layer.mode === "fill") context.fill(path, layer.rule || "nonzero");
     else context.stroke(path);
   }
   context.restore();

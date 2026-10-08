@@ -1,7 +1,7 @@
 import * as THREE from "./vendor/three.module.js";
-import { ALLIANCES, MAX_POWER, dominantAlliance, planetNames, activeVectors } from "./campaign.js";
+import { ALLIANCES, MAX_POWER, dominantAlliance, planetNames, activeVectors, isOrbitalStrike } from "./campaign.js";
 import { terrainTheme, seededRandom } from "./terrain.js";
-import { ALLIANCE_EMBLEMS, drawEmblem, fleetEmblem } from "./emblems.js";
+import { ALLIANCE_EMBLEMS, SHIP_SILHOUETTES, drawEmblem, fleetEmblem, shipKey, shipScale } from "./emblems.js";
 
 const PLANET_RADIUS = 26;
 const PHOSPHOR = 0x33ff33;
@@ -80,12 +80,16 @@ function lavaSeams(c, rand) {
 }
 
 function cloudPainter(c, theme, rand) {
-  if (theme.key === "smog") {
+  if (theme.key === "forge_complex") {
     blotches(c, [theme.cloud, "#6b7a3a"], rand, 90, 18, 60, 0.32);
     return;
   }
+  if (theme.key === "rad_zone") {
+    blotches(c, [theme.cloud, "#7a8a1a"], rand, 60, 14, 50, 0.24);
+    return;
+  }
   blotches(c, [theme.cloud], rand, 40, 10, 40, 0.22);
-  strokes(c, rand, theme.key === "ice" ? 90 : 40, [theme.cloud, "#e8f7ff"], theme.key === "ice" ? 4 : 3, 110);
+  strokes(c, rand, 40, [theme.cloud, "#e8f7ff"], 3, 110);
 }
 
 const PAINTERS = {
@@ -100,33 +104,6 @@ const PAINTERS = {
     blotches(c, [t.base, "#3a0f04", "#5a1a06"], rand, 60, 16, 70, 0.7);
     cracks(c, rand, 55, t.accent, 2.4, "#ff5a00");
     blotches(c, ["#ffdd55"], rand, 14, 4, 14, 0.8);
-  },
-  ice(c, t, rand) {
-    const gradient = c.createLinearGradient(0, 0, 0, 256);
-    gradient.addColorStop(0, "#ffffff");
-    gradient.addColorStop(0.25, t.base);
-    gradient.addColorStop(0.5, t.dark);
-    gradient.addColorStop(0.75, t.base);
-    gradient.addColorStop(1, "#ffffff");
-    c.fillStyle = gradient;
-    c.fillRect(0, 0, 512, 256);
-    blotches(c, [t.accent, "#e8f7ff", t.dark], rand, 70, 10, 50, 0.5);
-    // Crystalline facets.
-    for (let i = 0; i < 90; i++) {
-      const x = rand() * 512;
-      const y = rand() * 256;
-      const r = 6 + rand() * 18;
-      c.globalAlpha = 0.18 + rand() * 0.3;
-      c.fillStyle = rand() > 0.5 ? "#ffffff" : "#7fc4ec";
-      c.beginPath();
-      c.moveTo(x, y - r);
-      c.lineTo(x + r * (0.4 + rand() * 0.6), y + r * rand() * 0.6);
-      c.lineTo(x - r * (0.4 + rand() * 0.6), y + r * (0.2 + rand() * 0.6));
-      c.closePath();
-      c.fill();
-    }
-    c.globalAlpha = 1;
-    cracks(c, rand, 40, "#3d6f9a", 1.2, "transparent");
   },
   lava(c, t, rand, seed) {
     c.fillStyle = t.dark;
@@ -443,12 +420,17 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     }));
   }
 
-  function seamTexture(planet) {
-    return cached(`seams:${planet.id}`, () => {
+  // Emissive hazard map for "pulse" worlds: glowing rad hotspots on Rad Zones, lava seams otherwise.
+  function seamTexture(planet, theme) {
+    return cached(`seams:${planet.id}:${theme.key}`, () => {
       const texture = canvasTexture(512, 256, (c) => {
         c.fillStyle = "#000000";
         c.fillRect(0, 0, 512, 256);
-        lavaSeams(c, seededRandom(`${planet.id}-seams`));
+        const rand = seededRandom(`${planet.id}-seams`);
+        if (theme.key === "rad_zone") {
+          blotches(c, [theme.accent, "#7aff1a"], rand, 34, 6, 26, 0.75);
+          cracks(c, rand, 26, theme.accent, 1.4, theme.accent);
+        } else lavaSeams(c, rand);
       });
       texture.wrapS = THREE.RepeatWrapping;
       return texture;
@@ -469,7 +451,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
       const clouds = new THREE.Mesh(new THREE.SphereGeometry(PLANET_RADIUS * 1.045, 40, 28), new THREE.MeshLambertMaterial({ map: cloudTexture(planet, theme), transparent: true, depthWrite: false, emissive: new THREE.Color(theme.cloud), emissiveIntensity: 0.12 }));
       clouds.rotation.z = 0.2;
       holder.add(clouds);
-      spinners.push({ object: clouds, speed: theme.key === "ice" ? 0.42 : 0.3 });
+      spinners.push({ object: clouds, speed: 0.3 });
     }
     if (effectsList.includes("seams")) {
       const seams = new THREE.Mesh(new THREE.IcosahedronGeometry(PLANET_RADIUS * 1.025, 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(theme.seam), wireframe: true, transparent: true, opacity: 0.55 }));
@@ -582,7 +564,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
       debrisById.set(planet.id, debris);
     } else {
       const lava = (theme.effects || []).includes("pulse");
-      const body = new THREE.Mesh(new THREE.SphereGeometry(PLANET_RADIUS, 48, 32), new THREE.MeshLambertMaterial({ map: surface(planet, theme), emissive: 0xffffff, emissiveMap: lava ? seamTexture(planet) : surface(planet, theme), emissiveIntensity: lava ? 1.1 : 0.32 }));
+      const body = new THREE.Mesh(new THREE.SphereGeometry(PLANET_RADIUS, 48, 32), new THREE.MeshLambertMaterial({ map: surface(planet, theme), emissive: 0xffffff, emissiveMap: lava ? seamTexture(planet, theme) : surface(planet, theme), emissiveIntensity: lava ? 1.1 : 0.32 }));
       if (lava) throbs.push({ material: body.material, property: "emissiveIntensity", base: 1.05, amp: 0.55, speed: 2.4 });
       body.rotation.z = 0.35;
       body.userData.planetId = planet.id;
@@ -654,17 +636,34 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     const hex = new THREE.Color(data.alliances[assault.alliance].color);
     const a = world(from);
     const b = world(to);
-    const direction = b.clone().sub(a).normalize();
-    const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(14);
-    const start = a.clone().addScaledVector(direction, PLANET_RADIUS * 1.5).add(side).setY(12);
-    const end = b.clone().addScaledVector(direction, -PLANET_RADIUS * 1.7).add(side).setY(12);
-    const control = start.clone().lerp(end, 0.5).add(side.clone().multiplyScalar(1.5));
-    control.y += 70 + start.distanceTo(end) * 0.22;
-    const curve = new THREE.QuadraticBezierCurve3(start, control, end);
+    const orbital = isOrbitalStrike(assault);
+    let curve;
+    if (orbital) {
+      // Orbital engagement: a spiral descent conduit from high orbit down onto the world's crown.
+      const points = [];
+      const phase = index * 1.7;
+      for (let i = 0; i <= 90; i++) {
+        const t = i / 90;
+        const angle = phase + t * 2.75 * Math.PI * 2;
+        const radius = PLANET_RADIUS * 2.4 * Math.pow(1 - t, 0.85);
+        points.push(new THREE.Vector3(b.x + Math.cos(angle) * radius, PLANET_RADIUS * (1 + 3.8 * (1 - t)), b.z + Math.sin(angle) * radius));
+      }
+      curve = new THREE.CatmullRomCurve3(points);
+    } else {
+      const direction = b.clone().sub(a).normalize();
+      const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(14);
+      const start = a.clone().addScaledVector(direction, PLANET_RADIUS * 1.5).add(side).setY(12);
+      const end = b.clone().addScaledVector(direction, -PLANET_RADIUS * 1.7).add(side).setY(12);
+      const control = start.clone().lerp(end, 0.5).add(side.clone().multiplyScalar(1.5));
+      control.y += 70 + start.distanceTo(end) * 0.22;
+      curve = new THREE.QuadraticBezierCurve3(start, control, end);
+    }
+    const end = curve.getPoint(1);
     const group = new THREE.Group();
-    group.userData = { assault: `${assault.from}>${assault.to}>${assault.alliance}` };
-    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 2.4, 6), new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false })));
-    const track = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(80)), new THREE.LineDashedMaterial({ color: hex, dashSize: 6, gapSize: 7, transparent: true, opacity: 0.7 }));
+    group.userData = { assault: `${assault.from}>${assault.to}>${assault.alliance}`, orbital };
+    const segments = orbital ? 180 : 48;
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, segments, 2.4, 6), new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false })));
+    const track = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(segments * 2)), new THREE.LineDashedMaterial({ color: hex, dashSize: 6, gapSize: 7, transparent: true, opacity: 0.7 }));
     track.computeLineDistances();
     group.add(track);
     const head = new THREE.Mesh(new THREE.ConeGeometry(6, 16, 10), new THREE.MeshBasicMaterial({ color: hex }));
@@ -713,14 +712,17 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     if (active) render();
   }
 
-  function shipGeometry() {
-    const geometry = new THREE.BufferGeometry();
-    const v = [0, 0, 9, -5, 0, -6, 5, 0, -6, 0, 2.6, -4, 0, -1.6, -5];
-    const index = [0, 1, 3, 0, 3, 2, 0, 2, 4, 0, 4, 1, 1, 4, 2, 1, 2, 3];
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
-    geometry.setIndex(index);
-    geometry.computeVertexNormals();
-    return geometry;
+  // Extrudes the faction silhouette from emblems.js; the prow (-y in 2D) becomes +z so lookAt() flies it nose-first.
+  const shipGeometries = new Map();
+  function shipGeometry(kind) {
+    if (!shipGeometries.has(kind)) {
+      const shape = new THREE.Shape(SHIP_SILHOUETTES[kind].hull.map(([x, y]) => new THREE.Vector2(x, y)));
+      const geometry = new THREE.ExtrudeGeometry(shape, { depth: 2.6, bevelEnabled: true, bevelThickness: 0.8, bevelSize: 0.5, bevelSegments: 1 });
+      geometry.translate(0, 0, -1.3);
+      geometry.rotateX(-Math.PI / 2);
+      shipGeometries.set(kind, geometry);
+    }
+    return shipGeometries.get(kind);
   }
 
   function addFleets(planet) {
@@ -728,17 +730,19 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     planet.fleets.forEach((fleet, index) => {
       const hex = data.alliances[fleet.alliance].color;
       const emblem = fleetEmblem(fleet);
+      const kind = shipKey(fleet);
       const key = `${planet.id}:${index}:${fleet.faction}:${fleet.badge || ""}:${fleet.name || ""}`;
       const radius = PLANET_RADIUS + 22 + index * 11;
       const tilt = (index % 2 ? -1 : 1) * (0.25 + index * 0.12);
       const ship = new THREE.Group();
-      const hull = new THREE.Mesh(shipGeometry(), new THREE.MeshLambertMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.35, flatShading: true }));
-      hull.scale.setScalar(1.25);
+      ship.userData.ship = kind;
+      const hull = new THREE.Mesh(shipGeometry(kind), new THREE.MeshLambertMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.35, flatShading: true }));
+      hull.scale.setScalar(0.85 * shipScale(fleet));
       hull.userData.planetId = planet.id;
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(hull.geometry), new THREE.LineBasicMaterial({ color: 0xeaffea, transparent: true, opacity: 0.6 }));
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(hull.geometry, 30), new THREE.LineBasicMaterial({ color: 0xeaffea, transparent: true, opacity: 0.6 }));
       edges.scale.copy(hull.scale);
       const engine = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: hex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-      engine.position.set(0, 0, -8);
+      engine.position.set(0, 0, -10 * hull.scale.x);
       engine.scale.setScalar(10);
       const insignia = new THREE.Sprite(new THREE.SpriteMaterial({ map: emblemTexture(emblem, fleet.alliance), transparent: true, depthWrite: false }));
       insignia.position.set(0, 13, 0);
@@ -870,6 +874,77 @@ export function createCogitatorView(container, initialData, initialSelection, { 
     const effect = effects[index];
     disposeGroup(effect.group);
     effects.splice(index, 1);
+  }
+
+  // ---------- Infrastructure construction ----------
+  const constructions = [];
+  function construct(planetId, alliance) {
+    const planet = data.planets.find((entry) => entry.id === planetId);
+    if (!planet || planet.destroyed || !active || reducedMotion.matches) return false;
+    const hex = new THREE.Color(data.alliances[alliance]?.color || "#33ff33");
+    const additive = { color: hex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
+    const group = new THREE.Group();
+    group.position.copy(world(planet));
+    scene.add(group);
+    const scaffold = new THREE.Mesh(new THREE.IcosahedronGeometry(PLANET_RADIUS * 1.24, 1), new THREE.MeshBasicMaterial({ ...additive, wireframe: true, opacity: 0.9 }));
+    const girders = new THREE.Mesh(new THREE.SphereGeometry(PLANET_RADIUS * 1.42, 14, 9), new THREE.MeshBasicMaterial({ ...additive, wireframe: true, opacity: 0.45 }));
+    const scan = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 6, 72), new THREE.MeshBasicMaterial({ ...additive, color: 0xeaffea, opacity: 0.9 }));
+    scan.rotation.x = Math.PI / 2;
+    const rand = seededRandom(`${planet.id}-construct-${Date.now()}`);
+    const count = 260;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const sparks = Array.from({ length: count }, () => ({
+      direction: new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize(),
+      offset: rand(),
+      speed: 0.9 + rand() * 1.4,
+    }));
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    const points = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 5, map: glowTexture, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    group.add(scaffold, girders, scan, points);
+    const entry = { planetId, group, scaffold, girders, scan, points, sparks, hex, age: 0, duration: 3.6 };
+    constructions.push(entry);
+    stepConstruction(entry, 0);
+    return true;
+  }
+
+  const sparkWhite = new THREE.Color(0xffffff);
+  function stepConstruction(entry, delta) {
+    entry.age += delta;
+    const progress = entry.age / entry.duration;
+    const grow = 1 - Math.pow(1 - Math.min(1, entry.age / 0.7), 3);
+    const fade = progress > 0.72 ? Math.max(0, 1 - (progress - 0.72) / 0.28) : 1;
+    entry.scaffold.scale.setScalar(0.55 + grow * 0.45);
+    entry.scaffold.rotation.y += delta * 0.9;
+    entry.scaffold.rotation.x += delta * 0.35;
+    entry.scaffold.material.opacity = 0.9 * fade;
+    entry.girders.scale.setScalar(0.7 + grow * 0.3);
+    entry.girders.rotation.y -= delta * 0.5;
+    entry.girders.material.opacity = (0.35 + Math.sin(entry.age * 9) * 0.12) * fade;
+    const shell = PLANET_RADIUS * 1.3;
+    const height = shell * (-1 + 2 * ((entry.age * 0.85) % 1));
+    entry.scan.position.y = height;
+    entry.scan.scale.setScalar(Math.max(0.01, Math.sqrt(Math.max(0, shell * shell - height * height))));
+    entry.scan.material.opacity = 0.9 * fade;
+    const positions = entry.points.geometry.attributes.position;
+    const colors = entry.points.geometry.attributes.color;
+    const colour = new THREE.Color();
+    entry.sparks.forEach((spark, i) => {
+      const life = (spark.offset + entry.age * spark.speed) % 1;
+      const distance = PLANET_RADIUS * (1.02 + life * 0.55);
+      positions.array.set([spark.direction.x * distance, spark.direction.y * distance, spark.direction.z * distance], i * 3);
+      colour.copy(sparkWhite).lerp(entry.hex, Math.min(1, life * 2)).multiplyScalar((1 - life) * fade);
+      colors.array.set([colour.r, colour.g, colour.b], i * 3);
+    });
+    positions.needsUpdate = true;
+    colors.needsUpdate = true;
+  }
+
+  function finishConstruction(index) {
+    disposeGroup(constructions[index].group);
+    constructions.splice(index, 1);
   }
 
   // ---------- Scene sync ----------
@@ -1070,6 +1145,10 @@ export function createCogitatorView(container, initialData, initialSelection, { 
       }
       if (effect.age >= effect.duration) finishEffect(index);
     }
+    for (let index = constructions.length - 1; index >= 0; index--) {
+      stepConstruction(constructions[index], delta);
+      if (constructions[index].age >= constructions[index].duration) finishConstruction(index);
+    }
     if (focusing) {
       target.lerp(focusGoal, Math.min(1, delta * 3));
       if (target.distanceTo(focusGoal) < 0.5) focusing = false;
@@ -1089,6 +1168,7 @@ export function createCogitatorView(container, initialData, initialSelection, { 
       frame = requestAnimationFrame(animate);
     } else {
       for (let index = effects.length - 1; index >= 0; index--) finishEffect(index);
+      for (let index = constructions.length - 1; index >= 0; index--) finishConstruction(index);
       for (const debris of debrisById.values()) { debris.visible = true; debris.scale.setScalar(1); }
       spawns.clear();
       planetById.forEach((holder) => holder.scale.setScalar(1));
@@ -1106,5 +1186,5 @@ export function createCogitatorView(container, initialData, initialSelection, { 
 
   update(data, selection);
   fit();
-  return { update, zoom, fit, setActive, setVectors, dispose, debug: { scene, vectors: () => ({ visible: vectorGroup.visible, arcs: vectorGroup.children.length, projectiles: projectiles.length }), effects: () => effects.length, planets: () => planetById.size, ships: () => ships.length, lanes: () => data.warpLanes.length } };
+  return { update, zoom, fit, setActive, setVectors, construct, dispose, debug: { scene, vectors: () => ({ visible: vectorGroup.visible, arcs: vectorGroup.children.length, orbital: vectorGroup.children.filter((group) => group.userData.orbital).length, projectiles: projectiles.length }), effects: () => effects.length, constructions: () => constructions.length, planets: () => planetById.size, ships: () => ships.map((entry) => entry.object.userData.ship), lanes: () => data.warpLanes.length } };
 }

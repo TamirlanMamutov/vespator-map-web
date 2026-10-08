@@ -2,124 +2,224 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ALLIANCES, DEFAULT_BADGES, SLOT_CATEGORIES, validateCampaign, neighbors, dominantAlliance, planetNames,
+  ALLIANCES, DEFAULT_BADGES, SLOT_CATEGORIES, INFRASTRUCTURE_TYPES, MAX_INFRASTRUCTURE, validateCampaign, neighbors, dominantAlliance, planetNames,
   slotInfo, occupiedSlots, setSlot, setInfrastructureCapacity, setPowerLevel, fleetTitle,
   commissionFleet, decommissionFleet, canTransfer, moveFleet, setDestroyed, serializeCampaign, planetById,
-  normalizeCampaign, terrainCategory, CRUSADE_TERRAIN, TERRAIN_CATEGORIES,
-  activeVectors, assaultTargets, launchAssault, recallAssault, assaultTitle,
+  normalizeCampaign, TERRAIN_TWISTS, TWIST_NAMES, MAX_TWISTS, twistKey, constructInfrastructure,
+  activeVectors, assaultTargets, launchAssault, recallAssault, assaultTitle, isOrbitalStrike,
 } from "../campaign.js";
 import {
   EMBLEMS, TERRAIN_GLYPHS, BADGE_EMBLEMS, ALLIANCE_EMBLEMS, INFRASTRUCTURE_EMBLEMS, FACTION_EMBLEMS,
-  factionEmblem, fleetEmblem, glyphKey,
+  SHIP_SILHOUETTES, SHIP_BADGES, factionEmblem, fleetEmblem, glyphKey, emblemLayers, shipKey, shipScale, shipClass, shipPath,
 } from "../emblems.js";
 import { terrainTheme, TERRAIN_THEMES, seededRandom } from "../terrain.js";
 
 const source = readFileSync(new URL("../campaign_data.json", import.meta.url), "utf8");
 const fresh = () => JSON.parse(source);
 const laneKey = ([a, b]) => [a, b].sort().join("|");
+const OFFICIAL_TWISTS = [
+  "Spaceport", "Desolate Wastes", "Xenoflora Jungle", "Rad Zone", "Forge Complex",
+  "Hab Sprawl", "Delvesite Facility", "Dead Lands", "Tomb Complex",
+];
 
-test("campaign data validates with all 13 worlds and 16 unique warp lanes", () => {
+test("campaign data validates with all 13 worlds and 18 unique warp lanes", () => {
   const data = validateCampaign(fresh());
   assert.equal(data.planets.length, 13);
-  assert.equal(data.warpLanes.length, 16);
-  assert.equal(new Set(data.warpLanes.map(laneKey)).size, 16);
+  assert.equal(data.warpLanes.length, 18);
+  assert.equal(new Set(data.warpLanes.map(laneKey)).size, 18);
 });
 
-test("warp-lane topology matches the adjusted sector map", () => {
+test("warp-lane topology matches the expanded sector map", () => {
   const data = fresh();
   const links = (id) => new Set(neighbors(data, id));
+  assert.deepEqual(links("sidon"), new Set(["knossos", "sarif_iv", "pluto_ii"]));
   assert.deepEqual(links("knossos"), new Set(["sidon", "sarif_iv"]));
+  assert.deepEqual(links("sarif_iv"), new Set(["sidon", "knossos", "harvest"]));
+  assert.deepEqual(links("harvest"), new Set(["sarif_iv", "myrkvidr", "niflegard", "gj_3378b"]));
+  assert.deepEqual(links("myrkvidr"), new Set(["harvest", "niflegard"]));
+  assert.deepEqual(links("niflegard"), new Set(["harvest", "myrkvidr"]));
   assert.deepEqual(links("pluto_ii"), new Set(["sidon", "amazon_xi", "nickel"]));
-  assert.deepEqual(links("sarif_iv"), new Set(["knossos", "harvest"]));
-  assert.deepEqual(links("baikonur"), new Set(["nickel", "aetna", "gj_3378b"]));
   assert.deepEqual(links("nickel"), new Set(["pluto_ii", "amazon_xi", "atacama", "baikonur"]));
   assert.deepEqual(links("aetna"), new Set(["atacama", "baikonur"]));
-  assert.deepEqual(links("harvest"), new Set(["sarif_iv", "niflegard", "gj_3378b"]));
-  assert.deepEqual(links("niflegard"), new Set(["harvest", "myrkvidr"]));
-  assert.deepEqual(links("myrkvidr"), new Set(["niflegard"]));
-  for (const [a, b] of [["knossos", "myrkvidr"], ["pluto_ii", "sarif_iv"], ["sarif_iv", "baikonur"], ["nickel", "aetna"], ["aetna", "gj_3378b"], ["knossos", "harvest"]]) {
-    assert.equal(links(a).has(b), false, `${a} must not link to ${b}`);
-  }
+  assert.deepEqual(links("baikonur"), new Set(["nickel", "aetna", "gj_3378b"]));
   const expected = [
-    "sidon-knossos", "sidon-pluto_ii", "knossos-sarif_iv", "sarif_iv-harvest", "harvest-niflegard", "harvest-gj_3378b",
-    "niflegard-myrkvidr", "pluto_ii-amazon_xi", "pluto_ii-nickel", "amazon_xi-nickel", "nickel-atacama", "nickel-baikonur",
-    "atacama-aetna", "atacama-gj_3378b", "baikonur-aetna", "baikonur-gj_3378b",
+    "sidon-knossos", "sidon-sarif_iv", "sidon-pluto_ii", "knossos-sarif_iv", "sarif_iv-harvest", "harvest-myrkvidr",
+    "harvest-niflegard", "harvest-gj_3378b", "niflegard-myrkvidr", "pluto_ii-amazon_xi", "pluto_ii-nickel", "amazon_xi-nickel",
+    "nickel-atacama", "nickel-baikonur", "atacama-aetna", "atacama-gj_3378b", "baikonur-aetna", "baikonur-gj_3378b",
   ].map((lane) => laneKey(lane.split("-")));
   assert.deepEqual(new Set(data.warpLanes.map(laneKey)), new Set(expected));
 });
 
-test("official Crusade terrain twists are applied to every world", () => {
-  const data = fresh();
-  normalizeCampaign(data);
-  const expected = {
-    "Ash Wastes": [["sidon", "knossos"], ["Choking Fallout", "Corroded Redoubts", "Slag Runoff"]],
-    "Death World": [["amazon_xi", "myrkvidr"], ["Predatory Foliage", "Spore Choke", "Bio-Resonant Canopy"]],
-    "Tomb World": [["nickel", "atacama", "sarif_iv"], ["Awoken Monolith Array", "Gauss Dispersion", "Phase Flares"]],
-    "Warp Rift": [["pluto_ii", "aetna"], ["Perils of the Empyrean", "Molten Sump", "Screaming Geysers"]],
-    "Fortress Bastion": [["gj_3378b", "niflegard", "baikonur", "harvest"], ["Void Shield Grid", "Trench Bastions", "Heavy Munitions Depot"]],
-  };
-  assert.deepEqual(TERRAIN_CATEGORIES, Object.keys(expected));
-  let covered = 0;
-  for (const [category, [worlds, twists]] of Object.entries(expected)) {
-    assert.deepEqual(CRUSADE_TERRAIN[category].twists, twists);
-    for (const id of worlds) {
-      const planet = planetById(data, id);
-      assert.equal(planet.terrainCategory, category, id);
-      assert.equal(terrainCategory(planet), category, id);
-      assert.deepEqual(planet.terrainTraits, twists, id);
-      covered++;
-    }
+test("exactly the nine official Vespator Front terrain twists exist", () => {
+  assert.deepEqual(TWIST_NAMES, OFFICIAL_TWISTS);
+  assert.equal(MAX_TWISTS, 3);
+  for (const [icon, name] of Object.entries(TERRAIN_TWISTS)) {
+    assert.equal(twistKey(name), icon);
+    assert.ok(TERRAIN_GLYPHS[icon]?.layers.length, `${icon} glyph`);
+    assert.equal(TERRAIN_GLYPHS[icon].label, name);
+    assert.ok(TERRAIN_THEMES[icon], `${icon} theme`);
   }
-  assert.equal(covered, data.planets.length);
-  assert.equal(normalizeCampaign(data), 0, "normalizing twice changes nothing");
-  assert.equal(terrainCategory({ id: "new_world", terrain: "Necron Crypt Plateau" }), "Tomb World");
-  assert.throws(() => validateCampaign({ ...fresh(), planets: fresh().planets.map((p, i) => i ? p : { ...p, terrainCategory: "Ocean" }) }), /terrainCategory/);
+  assert.deepEqual(Object.keys(TERRAIN_GLYPHS).filter((key) => key !== "unknown"), Object.keys(TERRAIN_TWISTS));
+  assert.equal(twistKey("Glacier"), null);
+  assert.equal(glyphKey("blizzard"), "unknown");
 });
 
-test("offensive vectors load from the data and follow warp lanes", () => {
+test("every world lists official twists with matching placard glyphs", () => {
+  const data = fresh();
+  assert.equal(normalizeCampaign(data), 0, "the shipped data is already canonical");
+  for (const planet of data.planets) {
+    assert.ok(planet.terrainTwists.length >= 1 && planet.terrainTwists.length <= MAX_TWISTS, planet.id);
+    assert.ok(planet.terrainTwists.every((twist) => OFFICIAL_TWISTS.includes(twist)), planet.id);
+    assert.deepEqual(planet.terrainIcons, planet.terrainTwists.map(twistKey), planet.id);
+    assert.equal(planet.terrainTraits, undefined);
+    assert.equal(planet.terrainCategory, undefined);
+  }
+  assert.deepEqual(planetById(data, "baikonur").terrainTwists, ["Spaceport", "Hab Sprawl"]);
+  assert.deepEqual(planetById(data, "sarif_iv").terrainIcons, ["tomb_complex", "hab_sprawl", "xenoflora_jungle"]);
+});
+
+test("invented terrain is rejected and legacy terrain fields migrate", () => {
+  const withTwists = (twists) => ({ ...fresh(), planets: fresh().planets.map((p, i) => i ? p : { ...p, terrainTwists: twists }) });
+  assert.throws(() => validateCampaign(withTwists(["Glacier"])), /terrainTwists/);
+  assert.throws(() => validateCampaign(withTwists(["Rad Zone", "Rad Zone"])), /terrainTwists/);
+  assert.throws(() => validateCampaign(withTwists(["Rad Zone", "Spaceport", "Dead Lands", "Hab Sprawl"])), /terrainTwists/);
+  assert.throws(() => validateCampaign(withTwists([])), /terrainTwists/);
+  assert.throws(() => validateCampaign({ ...fresh(), planets: fresh().planets.map((p, i) => i ? p : { ...p, terrainIcons: ["ice_glacier"] }) }), /terrainIcons/);
+  const legacy = fresh();
+  const sidon = planetById(legacy, "sidon");
+  delete sidon.terrainTwists;
+  sidon.terrainTraits = ["Choking Fallout", "Slag Runoff"];
+  sidon.terrainCategory = "Ash Wastes";
+  sidon.terrainIcons = ["rad_zone", "dead_lands"];
+  assert.equal(normalizeCampaign(legacy), 1);
+  assert.deepEqual(sidon.terrainTwists, ["Rad Zone", "Dead Lands"]);
+  assert.deepEqual(sidon.terrainIcons, ["rad_zone", "dead_lands"]);
+  assert.ok(!("terrainTraits" in sidon) && !("terrainCategory" in sidon));
+  assert.equal(normalizeCampaign(legacy), 0);
+});
+
+test("offensive vectors load from the data, including the orbital strike", () => {
   const data = fresh();
   normalizeCampaign(data);
-  assert.deepEqual(data.offensiveVectors.map(({ from, to, alliance }) => `${from}>${to}:${alliance}`), [
-    "gj_3378b>harvest:Imperium", "pluto_ii>nickel:Chaos", "sarif_iv>harvest:Xenos",
-  ]);
-  for (const assault of data.offensiveVectors) assert.ok(neighbors(data, assault.from).includes(assault.to));
-  assert.equal(activeVectors(data).length, 3);
-  assert.equal(assaultTitle(data, data.offensiveVectors[0]), "Crusade Spearhead");
+  assert.deepEqual(data.offensiveVectors.map(({ from, to, alliance }) => `${from}>${to}:${alliance}`), ["gj_3378b>harvest:Imperium", "pluto_ii>pluto_ii:Chaos"]);
+  assert.deepEqual(data.offensiveVectors.map(isOrbitalStrike), [false, true]);
+  assert.equal(activeVectors(data).length, 2);
+  assert.equal(assaultTitle(data, data.offensiveVectors[1]), "Orbital Bombardment");
   const bare = fresh();
   delete bare.offensiveVectors;
   normalizeCampaign(bare);
   assert.deepEqual(bare.offensiveVectors, []);
+  validateCampaign({ ...fresh(), offensiveVectors: [{ from: "sidon", to: "sidon", alliance: "Xenos" }] });
   const bad = (vectors) => assert.throws(() => validateCampaign({ ...fresh(), offensiveVectors: vectors }), /offensive vector/);
   bad([{ from: "knossos", to: "myrkvidr", alliance: "Xenos" }]);
-  bad([{ from: "sidon", to: "sidon", alliance: "Xenos" }]);
   bad([{ from: "sidon", to: "knossos", alliance: "Orks" }]);
-  bad([{ from: "sidon", to: "knossos", alliance: "Xenos" }, { from: "sidon", to: "knossos", alliance: "Xenos" }]);
+  bad([{ from: "sidon", to: "atlantis", alliance: "Xenos" }]);
+  bad([{ from: "sidon", to: "sidon", alliance: "Xenos" }, { from: "sidon", to: "sidon", alliance: "Xenos" }]);
 });
 
-test("Warmaster assaults launch only toward connected operational worlds and survive export", () => {
+test("Warmaster assaults target linked worlds or the host world itself and survive export", () => {
   const data = fresh();
   normalizeCampaign(data);
-  assert.deepEqual(new Set(assaultTargets(data, "aetna")), new Set(["atacama", "baikonur"]));
-  const assault = launchAssault(data, "aetna", "baikonur", "Chaos", "  Ember Tide  ");
-  assert.deepEqual(assault, { from: "aetna", to: "baikonur", alliance: "Chaos", label: "Ember Tide" });
+  assert.deepEqual(assaultTargets(data, "aetna"), ["aetna", "atacama", "baikonur"]);
+  const strike = launchAssault(data, "aetna", "aetna", "Chaos", "  Ember Rain  ");
+  assert.deepEqual(strike, { from: "aetna", to: "aetna", alliance: "Chaos", label: "Ember Rain" });
+  assert.ok(isOrbitalStrike(strike));
+  assert.deepEqual(launchAssault(data, "knossos", "knossos", "Xenos"), { from: "knossos", to: "knossos", alliance: "Xenos" });
+  assert.equal(assaultTitle(data, data.offensiveVectors.at(-1)), "Xenos Orbital Strike on Knossos");
   assert.deepEqual(launchAssault(data, "knossos", "sidon", "Xenos"), { from: "knossos", to: "sidon", alliance: "Xenos" });
   assert.equal(assaultTitle(data, data.offensiveVectors.at(-1)), "Xenos Assault on Sidon");
   assert.throws(() => launchAssault(data, "aetna", "gj_3378b", "Chaos"), /direct warp lane/);
-  assert.throws(() => launchAssault(data, "aetna", "baikonur", "Chaos"), /already assaulting/);
+  assert.throws(() => launchAssault(data, "aetna", "aetna", "Chaos"), /already assaulting/);
   assert.throws(() => launchAssault(data, "aetna", "atacama", "Tyranids"), /Unknown alliance/);
   setDestroyed(data, "atacama", true);
-  assert.throws(() => launchAssault(data, "aetna", "atacama", "Chaos"), /destroyed world/);
-  assert.throws(() => launchAssault(data, "atacama", "aetna", "Xenos"), /Exterminatus/);
-  setDestroyed(data, "harvest", true);
-  assert.equal(activeVectors(data).length, 3, "assaults touching destroyed worlds are suspended");
+  assert.deepEqual(assaultTargets(data, "aetna"), ["aetna", "baikonur"]);
+  assert.deepEqual(assaultTargets(data, "atacama"), []);
+  assert.throws(() => launchAssault(data, "atacama", "atacama", "Xenos"), /Exterminatus/);
+  setDestroyed(data, "pluto_ii", true);
+  assert.equal(activeVectors(data).length, 4, "the Pluto II orbital strike is suspended");
   assert.equal(data.offensiveVectors.length, 5, "suspended assaults stay on record");
   recallAssault(data, 0);
   assert.throws(() => recallAssault(data, 99), /no longer exists/);
   const exported = JSON.parse(serializeCampaign(data));
   assert.deepEqual(exported.offensiveVectors, data.offensiveVectors);
   assert.deepEqual(exported.warpLanes, fresh().warpLanes);
-  assert.equal(exported.planets.find((p) => p.id === "niflegard").terrainTraits[1], "Trench Bastions");
+  assert.deepEqual(exported.planets.map((p) => p.terrainTwists), fresh().planets.map((p) => p.terrainTwists));
+  assert.ok(exported.planets.every((p) => !("terrainTraits" in p)));
 });
+
+test("constructing infrastructure fills the first empty slot, then grows capacity", () => {
+  const data = fresh();
+  const planet = planetById(data, "niflegard");
+  assert.equal(constructInfrastructure(data, "niflegard", "Fortification Line", "Xenos"), 1);
+  assert.deepEqual(planet.infrastructure.slots[1], { type: "Fortification Line", alliance: "Xenos" });
+  assert.equal(constructInfrastructure(data, "niflegard", "Stronghold", "Chaos"), 2);
+  assert.equal(planet.infrastructure.maxSlots, 3);
+  assert.deepEqual(planet.infrastructure.slots[2], { type: "Chaos Stronghold", alliance: "Chaos" });
+  while (planet.infrastructure.maxSlots < MAX_INFRASTRUCTURE) constructInfrastructure(data, "niflegard", "Staging Grounds", "Imperium");
+  assert.throws(() => constructInfrastructure(data, "niflegard", "Support Facility", "Xenos"), /no free infrastructure slots/);
+  assert.throws(() => constructInfrastructure(data, "sidon", "Empty", "Xenos"), /Choose an infrastructure type/);
+  assert.throws(() => constructInfrastructure(data, "sidon", "Support Facility", "Orks"), /Unknown alliance/);
+  setDestroyed(data, "sidon", true);
+  assert.throws(() => constructInfrastructure(data, "sidon", "Support Facility", "Xenos"), /Exterminatus/);
+  validateCampaign(data);
+  for (const type of INFRASTRUCTURE_TYPES) assert.ok(EMBLEMS[INFRASTRUCTURE_EMBLEMS[type]], type);
+});
+
+test("terrain glyph artwork renders for every placard icon", () => {
+  for (const planet of fresh().planets) {
+    for (const icon of planet.terrainIcons) {
+      assert.equal(glyphKey(icon), icon, `${planet.id} glyph ${icon}`);
+      assert.ok(emblemLayers(icon).every((layer) => typeof layer.d === "string" && layer.d.length), icon);
+    }
+  }
+  assert.ok(emblemLayers("unknown").length);
+});
+
+test("3D surfaces follow each world's primary terrain twist", () => {
+  const data = fresh();
+  const theme = (id) => terrainTheme(planetById(data, id));
+  const expected = {
+    sidon: "rad_zone", pluto_ii: "rad_zone", knossos: "forge_complex", harvest: "forge_complex",
+    myrkvidr: "xenoflora_jungle", amazon_xi: "xenoflora_jungle", niflegard: "delvesite_facility",
+    sarif_iv: "tomb_complex", nickel: "tomb_complex", atacama: "tomb_complex",
+    baikonur: "spaceport", aetna: "desolate_wastes", gj_3378b: "hab_sprawl",
+  };
+  for (const [id, key] of Object.entries(expected)) assert.equal(theme(id).key, key, id);
+  assert.ok(theme("pluto_ii").effects.includes("pulse"));
+  assert.ok(theme("gj_3378b").effects.includes("shield"));
+  assert.ok(theme("knossos").effects.includes("seams"));
+  assert.equal(terrainTheme({ terrain: "Unknown", terrainIcons: [] }).key, "unknown");
+  for (const t of Object.values(TERRAIN_THEMES)) assert.ok(!/ice|glacier|blizzard/i.test(t.label), t.label);
+  assert.equal(seededRandom("x")(), seededRandom("x")());
+});
+
+test("fleets carry ship badges with canonical silhouettes and faction emblems", () => {
+  const data = fresh();
+  const fleets = data.planets.flatMap((planet) => planet.fleets);
+  assert.equal(fleets.length, 5);
+  const kinds = Object.fromEntries(fleets.map((fleet) => [fleet.faction, shipKey(fleet)]));
+  assert.deepEqual(kinds, { Necrons: "necron", Aeldari: "aeldari", "Thousand Sons": "chaos", "Imperial Knights": "imperium", "Imperial Guard": "imperium" });
+  for (const fleet of fleets) {
+    assert.ok(SHIP_BADGES[fleet.badge], fleet.badge);
+    assert.ok(EMBLEMS[fleetEmblem(fleet)], fleet.faction);
+    assert.equal(fleetEmblem(fleet), FACTION_EMBLEMS[fleet.faction]);
+    assert.equal(fleetTitle(fleet), `${fleet.faction} Battlegroup`);
+    assert.ok(shipClass(fleet).length);
+  }
+  assert.equal(shipKey({ faction: "Death Guard", alliance: "Chaos" }), "chaos");
+  assert.equal(shipKey({ faction: "Unknown", alliance: "Xenos", badge: "aeldari_cruiser" }), "aeldari");
+  assert.equal(shipScale({ badge: "imperial_battleship" }), 1.2);
+  assert.equal(shipScale({ badge: "unknown" }), 1);
+  for (const badge of Object.values(DEFAULT_BADGES)) assert.ok(SHIP_BADGES[badge] && EMBLEMS[BADGE_EMBLEMS[badge]], badge);
+  for (const [key, ship] of Object.entries(SHIP_SILHOUETTES)) {
+    assert.ok(ship.hull.length >= 12, key);
+    assert.ok(ship.hull.every(([x, y]) => Math.abs(x) <= 12 && Math.abs(y) <= 12), `${key} fits the 24-unit box`);
+    assert.match(shipPath(key), /^M[-\d.]+ [-\d.]+(L[-\d.]+ [-\d.]+)+Z$/);
+  }
+  assert.equal(new Set(Object.values(SHIP_SILHOUETTES).map((ship) => shipPath(Object.keys(SHIP_SILHOUETTES).find((k) => SHIP_SILHOUETTES[k] === ship)))).size, 4);
+  assert.equal(fleetTitle({ faction: "Necrons", name: "Szarekhan Dynasty" }), "Szarekhan Dynasty");
+});
+
 test("world coordinates keep the outer perimeter and never overlap", () => {
   const { planets } = fresh();
   for (let i = 0; i < planets.length; i++) {
@@ -147,38 +247,6 @@ test("power matrices match the campaign record", () => {
   }
 });
 
-test("every world has a terrain profile with three twists and known glyphs", () => {
-  for (const planet of fresh().planets) {
-    assert.equal(planet.terrainTraits.length, 3, planet.id);
-    assert.ok(planet.terrainIcons.length > 0, planet.id);
-    for (const icon of planet.terrainIcons) {
-      assert.equal(glyphKey(icon), icon, `${planet.id} glyph ${icon}`);
-      assert.ok(TERRAIN_GLYPHS[icon].layers.length && TERRAIN_GLYPHS[icon].label, icon);
-    }
-  }
-  assert.equal(glyphKey("not-a-real-icon"), "unknown");
-});
-
-test("terrain classes map to the requested 3D surfaces and effects", () => {
-  const data = fresh();
-  const theme = (id) => terrainTheme(planetById(data, id));
-  assert.equal(theme("niflegard").key, "ice");
-  assert.ok(theme("niflegard").effects.includes("clouds"));
-  assert.equal(theme("knossos").key, "smog");
-  assert.ok(theme("knossos").effects.includes("seams"));
-  assert.equal(theme("myrkvidr").key, "forest");
-  assert.equal(theme("pluto_ii").key, "infernal");
-  assert.ok(theme("pluto_ii").effects.includes("pulse"));
-  assert.equal(theme("aetna").key, "scorched");
-  assert.ok(theme("aetna").effects.includes("smoke"));
-  assert.equal(theme("harvest").key, "agri");
-  assert.equal(theme("gj_3378b").key, "fortress");
-  assert.ok(theme("gj_3378b").effects.includes("shield"));
-  assert.equal(theme("amazon_xi").key, "jungle");
-  for (const planet of data.planets) assert.ok(TERRAIN_THEMES[theme(planet.id).key]);
-  assert.equal(seededRandom("x")(), seededRandom("x")());
-});
-
 test("warp-lane network is fully connected", () => {
   const data = fresh();
   const seen = new Set([data.planets[0].id]);
@@ -197,19 +265,6 @@ test("names split into world and system designation", () => {
     assert.equal(system, planet.subName);
   }
   assert.deepEqual(planetNames({ name: "Alpha / Beta" }), { world: "Alpha", system: "Beta" });
-});
-
-test("fleets carry badges with emblems and default titles", () => {
-  const data = fresh();
-  const fleets = data.planets.flatMap((planet) => planet.fleets);
-  assert.equal(fleets.length, 5);
-  for (const fleet of fleets) {
-    assert.ok(EMBLEMS[BADGE_EMBLEMS[fleet.badge]], fleet.badge);
-    assert.equal(fleetEmblem(fleet), BADGE_EMBLEMS[fleet.badge]);
-    assert.equal(fleetTitle(fleet), `${fleet.faction} Battlegroup`);
-  }
-  for (const badge of Object.values(DEFAULT_BADGES)) assert.ok(EMBLEMS[BADGE_EMBLEMS[badge]], badge);
-  assert.equal(fleetTitle({ faction: "Necrons", name: "Szarekhan Dynasty" }), "Szarekhan Dynasty");
 });
 
 test("fleets transfer only along direct lanes between operational worlds", () => {
