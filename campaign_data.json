@@ -211,7 +211,8 @@
         {
           "alliance": "Imperium",
           "faction": "Imperial Knights",
-          "badge": "imperial_cruiser"
+          "badge": "imperial_cruiser",
+          "name": "House Valgard"
         }
       ],
       "destroyed": false
