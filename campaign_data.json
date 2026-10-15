@@ -225,8 +225,8 @@
       "y": 450,
       "powerLevels": {
         "Imperium": 1,
-        "Xenos": 3,
-        "Chaos": 2
+        "Xenos": 4,
+        "Chaos": 1
       },
       "infrastructure": {
         "maxSlots": 3,
