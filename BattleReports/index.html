@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#030803">
+  <meta name="description" content="Vespator Front Crusade — battle report archive and Warmaster dispatch cogitator.">
+  <title>Vespator Front // Battle Archive</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23020703'/%3E%3Cpath d='M3 13 13 3M3 3l10 10' stroke='%2333ff33' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css?v=1.2">
+  <script type="module" src="config.js?v=1.2"></script>
+  <script type="module" src="reports.js?v=1.2"></script>
+  <script type="module" src="ai_helper.js?v=1.2"></script>
+  <script type="module" src="uplink.js?v=1.2"></script>
+  <script type="module" src="images.js?v=1.2"></script>
+  <script type="module" src="app.js?v=1.2"></script>
+</head>
+<body>
+  <div class="crt" aria-hidden="true"></div>
+  <header class="hud">
+    <div class="brand"><span class="seal" aria-hidden="true">⚔</span><span><small>DEPARTMENTO MUNITORUM // CRUSADE ARCHIVE</small><strong>VESPATOR FRONT — BATTLE REPORTS</strong></span></div>
+    <div class="hud-search">
+      <input id="search" type="search" placeholder="SEARCH: planet, faction, commander…" aria-label="Search the archive">
+      <button id="sort-toggle" class="view-toggle" type="button">▼ NEWEST FIRST</button>
+    </div>
+    <div class="hud-actions">
+      <span id="mode-badge" class="mode-badge">PUBLIC ARCHIVE // READ-ONLY</span>
+      <a id="map-link" class="outline-button" href="../index.html">[ 🗺 TACTICAL COGITATOR ]</a>
+      <span id="warmaster-actions" class="warmaster-actions" hidden>
+        <button id="new-report" class="primary-button" type="button">+ NEW REPORT</button>
+        <button id="uplink-button" class="outline-button" type="button">☁ UPLINK</button>
+        <button id="transmit" class="export-button" type="button">⇪ TRANSMIT</button>
+        <button id="export" class="outline-button" type="button" title="Download battle_reports.json">⇩ EXPORT</button>
+        <label class="outline-button file-button" title="Load a battle_reports.json file">⇧ IMPORT<input id="import" type="file" accept=".json,application/json" hidden></label>
+      </span>
+      <button id="override" class="outline-button" type="button">◇ WARMASTER ACCESS</button>
+    </div>
+  </header>
+  <div id="status" class="status-line" role="status" aria-live="polite"></div>
+  <nav id="chronicle-index" class="chronicle-index" aria-label="Chronicle index"></nav>
+  <main id="archive" class="archive"></main>
+  <footer class="footer">+++ THOUGHT FOR THE DAY: A WAR UNRECORDED IS A WAR UNWON +++</footer>
+
+  <dialog id="passkey-dialog">
+    <form id="passkey-form">
+      <span class="eyebrow">RESTRICTED / COMMAND AUTHORITY</span>
+      <h2>Warmaster passkey</h2>
+      <p class="muted">Unlocks the edit &amp; dispatch console on this device. Publishing additionally requires a GitHub token.</p>
+      <label class="field wide"><span>Command passkey</span><input id="passkey" type="password" autocomplete="current-password" required></label>
+      <p id="passkey-error" class="error-text" role="alert"></p>
+      <div class="dialog-actions"><button type="button" id="cancel-passkey" class="outline-button">CANCEL</button><button class="primary-button" type="submit">AUTHORIZE</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-dialog" class="editor-dialog" aria-labelledby="editor-title">
+    <form id="editor-form" class="editor-form" novalidate>
+      <header class="editor-head">
+        <span class="eyebrow">WARMASTER // EDIT &amp; DISPATCH</span>
+        <h2 id="editor-title">NEW BATTLE REPORT</h2>
+      </header>
+      <div class="editor-layout">
+        <div id="editor-body" class="editor-body"></div>
+        <aside class="ai-panel" aria-label="AI narrative drafter">
+          <span class="eyebrow">COGITATOR SCRIPTORIUM</span>
+          <h3>✠ AI Narrative Drafter</h3>
+          <p class="muted small">Write rough bullet points; the scriptorium turns them into a Gothic prompt for any AI (nothing is sent automatically) or an offline draft.</p>
+          <label class="field wide"><span>Target section</span><select id="ai-section"></select></label>
+          <div class="grid two">
+            <label class="field"><span>Voice</span><select id="ai-tone"></select></label>
+            <label class="field"><span>Language</span><select id="ai-lang"></select></label>
+          </div>
+          <label class="field wide"><span>Bullet points</span><textarea id="ai-bullets" rows="6" placeholder="- Некроны опоздали с высадкой&#10;- Севериан в одиночку держал точку"></textarea></label>
+          <div class="button-row">
+            <button id="ai-build" type="button" class="primary-button">BUILD PROMPT</button>
+            <button id="ai-offline" type="button" class="outline-button">OFFLINE DRAFT</button>
+            <button id="ai-bullets-hl" type="button" class="outline-button" title="Append each bullet as a highlight">BULLETS → HIGHLIGHTS</button>
+          </div>
+          <hr>
+          <h3>🖼 Image Helper</h3>
+          <div class="grid two">
+            <label class="field"><span>Scene</span><select id="img-scene"><option value="header">Header artwork</option><option value="aftermath">Aftermath artwork</option></select></label>
+            <button id="img-build" type="button" class="outline-button align-end">BUILD ART PROMPT</button>
+          </div>
+          <hr>
+          <label class="field wide"><span>Output — paste the AI reply here</span><textarea id="ai-output" rows="9"></textarea></label>
+          <p id="ai-note" class="muted small" aria-live="polite"></p>
+          <div class="button-row">
+            <button id="ai-copy" type="button" class="outline-button">⧉ COPY</button>
+            <button id="ai-apply" type="button" class="primary-button">APPLY TO SECTION</button>
+          </div>
+        </aside>
+      </div>
+      <footer class="editor-foot">
+        <ul id="editor-errors" class="error-list" role="alert"></ul>
+        <div class="dialog-actions">
+          <button type="button" id="cancel-editor" class="outline-button">CANCEL</button>
+          <button type="submit" class="primary-button">✓ SAVE TO ARCHIVE</button>
+        </div>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="uplink-dialog" aria-labelledby="uplink-title">
+    <div class="uplink">
+      <span class="eyebrow">WARMASTER // REMOTE PUBLICATION</span>
+      <h2 id="uplink-title">☁ Archive Uplink</h2>
+      <p class="muted small">Commits <code>battle_reports.json</code> through the GitHub Contents API. Use a fine-grained personal access token limited to the archive repository with <b>Contents: Read and write</b>.</p>
+      <label class="field wide"><span>Repository (owner/repo)</span><input id="up-repo" autocomplete="off" spellcheck="false"></label>
+      <div class="grid two">
+        <label class="field"><span>Branch</span><input id="up-branch" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>File path in repository</span><input id="up-path" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <label class="field wide"><span>GitHub token</span><input id="up-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+      <p id="up-token-state" class="muted small"></p>
+      <label class="field check inline"><input id="up-remember" type="checkbox" checked><span>Remember token on this device (otherwise this tab only)</span></label>
+      <p class="small">Discord bot <code>REPORTS_DATA_URL</code>: <code id="up-raw">—</code></p>
+      <p id="up-result" class="result" role="status"></p>
+      <div class="dialog-actions">
+        <button id="up-forget" type="button" class="danger-button">FORGET TOKEN</button>
+        <button id="up-pull" type="button" class="outline-button" title="Load the archive straight from the branch">⇩ PULL</button>
+        <button id="up-verify" type="button" class="outline-button">VERIFY LINK</button>
+        <button id="up-save" type="button" class="primary-button">SAVE UPLINK</button>
+        <button id="up-close" type="button" class="outline-button">CLOSE</button>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>

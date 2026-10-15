@@ -1,0 +1,137 @@
+[
+  {
+    "id": "BR-001",
+    "battleNumber": 1,
+    "title": "Пробуждение Некронов: Первое столкновение",
+    "date": "2026-08-21",
+    "location": "Ксенофлора Sarif IV",
+    "mission": "Орбитальное вторжение",
+    "battleSize": "500pt",
+    "players": [
+      {
+        "handle": "@changingnickname",
+        "commander": "Тамирлан",
+        "faction": "НЕКРОНЫ",
+        "alliance": "Xenos",
+        "warlord": "Торинакх, Пряльщик Праха, Прайм",
+        "score": 70,
+        "isWinner": true,
+        "startCP": 0,
+        "endCP": -1,
+        "roster": [],
+        "rp": { "start": 5, "gained": 1, "spent": 0, "total": 6, "spentOn": "Ничего" },
+        "specialResource": { "name": "Awakening Points", "start": 2, "end": 1, "note": "Активировал Anastasic Contingency" },
+        "agendas": [
+          { "name": "IMMORTAL SERVITUDE", "completed": true, "xp": 1 },
+          { "name": "SUPREMACY THROUGH ANNIHILATION", "completed": false, "xp": 0 }
+        ],
+        "outOfActionTests": [
+          { "unit": "Lokhust Heavy Destoyer", "passed": true },
+          { "unit": "Canoptek Scarab Swarms", "passed": false, "scar": "FATIGUED" }
+        ],
+        "markedForGreatness": { "unit": "Torinakh the Weaver of Dust, Prime - Technomancer", "xp": 3, "reason": "За командованием успешной операцией" },
+        "rankPromotions": []
+      },
+      {
+        "handle": "@iamdavik",
+        "commander": "Давид",
+        "faction": "ИМПЕРСКИЕ РЫЦАРИ",
+        "alliance": "Imperium",
+        "warlord": "Севериан Вальгард фон Зеттюр",
+        "score": 35,
+        "isWinner": false,
+        "startCP": 0,
+        "endCP": 2,
+        "roster": [],
+        "rp": { "start": 5, "gained": 1, "spent": 1, "total": 5, "spentOn": "Ничего" },
+        "agendas": [
+          { "name": "SALLY FORTH", "completed": true, "xp": 1 },
+          { "name": "HONOUR MUST BE SATISFIED", "completed": false, "xp": 0 }
+        ],
+        "outOfActionTests": [],
+        "markedForGreatness": { "unit": "Севериан Вальгард фон Зеттюр - Knight Valiant", "xp": 3, "reason": "За то что вызвался сразится с противником и удерживать точку высадки врага в одиночку." },
+        "rankPromotions": [
+          { "unit": "Севериан Вальгард фон Зеттюр - Knight Valiant", "newRank": "Bloodied", "reward": "Реликвия Крестового похода (Crusade Relic) - Auto-medicae" }
+        ]
+      }
+    ],
+    "narrativeContext": "Правая рука оверлорда династии Секхемет, Торинакх, Пряльщик Праха, выдвинулся в сторону Сарифа IV, с целью провести разведывательную операцию в системе Веспатора, подготавливая почву к прибытию Эрсилакха, Вечной Дюны. Местные СПО вызывают на подмогу дом Вальгард и молодой рыцарь Севериан, племянник лорда его дома, вызвался встретить некронов в бою, чтобы проявить свою честь.",
+    "highlights": [
+      "Большая часть армии некронов опоздала на бой приземлилась поздно",
+      "Севериан в одиночку держался против всей армии некронов",
+      "Щиты Севериана защитили рыцаря-валианта от дальнобойных выстрелов гаусс-уничтожителей и в отместку он дезинтегрировал уничтожителей из своего гарпуна.",
+      "Оставшиеся каноптек призраки разодрали большую часть корпуса шасси Севериана, но машина уцелела. Слава Богу-Императору! (остался жить на 1ХП)"
+    ],
+    "narrativeAftermath": "Торинакх одолевает местное ополчение и заставляет Севериана отступить к шасси его матери, чтобы перегруппироваться. Тем временем, некроны начинают медленно дезинтегрировать местное человеческое население.",
+    "headerImageUrl": "https://media.discordapp.net/attachments/1538112239628849152/1540356456933490798/necrons_seraptek_defeat_imperial_knight_by_hexanity_dj6de72-fullview.png",
+    "aftermathImageUrl": "https://media.discordapp.net/attachments/1538112239628849152/1540716805008662648/DXYAMEcWsAA9QxF.png"
+  },
+  {
+    "id": "BR-002",
+    "battleNumber": 2,
+    "title": "Фелиниды-Ратлинги",
+    "date": "2026-08-22",
+    "location": "Радиационные Земли GJ-3378b",
+    "mission": "Очищение и Огонь",
+    "battleSize": "600pt",
+    "players": [
+      {
+        "handle": "@changingnickname",
+        "commander": "Тамирлан",
+        "faction": "НЕКРОНЫ",
+        "alliance": "Xenos",
+        "warlord": "Торинакх, Пряльщик Праха, Прайм",
+        "score": 60,
+        "isWinner": true,
+        "startCP": 0,
+        "endCP": 1,
+        "roster": [],
+        "rp": { "start": 6, "gained": 1, "spent": 3, "total": 6, "spentOn": "За 400 очков армии + Избавить Техномансера от Боевого Шрама" },
+        "specialResource": { "name": "Awakening Points", "start": 1, "end": 0, "note": "Активировал Rapid Reanimation" },
+        "agendas": [
+          { "name": "IMMORTAL SERVITUDE", "completed": true, "xp": 1 },
+          { "name": "RELENTLESS EXPANSION", "completed": true, "xp": 6 }
+        ],
+        "outOfActionTests": [
+          { "unit": "Canoptek Wraiths", "passed": true },
+          { "unit": "Torinakh the Archmeister - Technomancer", "passed": false, "scar": "Использовано 1RP, чтобы избавится от него" }
+        ],
+        "markedForGreatness": { "unit": "6 Dust Wraiths - Canoptek Wraiths", "xp": 3, "reason": "За то, что сумели нанести значимый урон шасси Лансера" },
+        "rankPromotions": [
+          { "unit": "Torinakh the Weaver of Dust, Prime - Technomancer", "newRank": "Bloodied", "reward": "Скоро поставлю" },
+          { "unit": "6 Dust Wraiths - Canoptek Wraiths", "newRank": "Bloodied", "reward": "Скоро поставлю" }
+        ]
+      },
+      {
+        "handle": "@iamdavik",
+        "commander": "Давид",
+        "faction": "ИМПЕРСКИЕ РЫЦАРИ",
+        "alliance": "Imperium",
+        "warlord": "Давидьяан Вальгард фон Зеттюр",
+        "score": 40,
+        "isWinner": false,
+        "startCP": 2,
+        "endCP": 3,
+        "roster": [],
+        "rp": { "start": 5, "gained": 1, "spent": 2, "total": 4, "spentOn": "Enchancement 'Augury Halo' - Севериан; Enchancement 'Bringer of Justice' - Давидьяан" },
+        "agendas": [
+          { "name": "BREAK THEIR WILL", "completed": true, "xp": 2 },
+          { "name": "HONOUR MUST BE SATISFIED", "completed": true, "xp": 2 }
+        ],
+        "outOfActionTests": [],
+        "markedForGreatness": { "unit": "Давидьяан Вальгард фон Зеттюр - Knight Lancer", "xp": 3, "reason": "Уничтожил клона вражеской техномрази" },
+        "rankPromotions": [
+          { "unit": "Knight Lancer- Давидьяан Вальгард фон Зеттюр", "newRank": "Bloodied", "reward": "Боевая Черта (Battle Trait) - Endless Rage" }
+        ]
+      }
+    ],
+    "narrativeContext": "Сер Давидьяан и его оруженосец из дома Вальгард получили известия с Сарифа IV, и координировали свой удар, чтобы уничтожить телепортирующуюся техно-мразь врага. Торинакх-Прайм успевает во время свести разум техномансера другой династии и заменить его своим, создавая своего клона - Торинакха-Архимастера.",
+    "highlights": [
+      "Торинакх проявил свою коварную и отвратную натуру: мерзкий техномансер взял под контроль разум другого техномансера и с своим разветвленным разумом он использовал гиперкриптную силы, чтобы телепортировать армии каждый раз когда они сталкивались с угрозой. В ответ на это оруженосец Леонтий воспользовался подвижностью своего шасси Армиджера, чтобы преодолеть километраж поля битвы и нагнать злосчастного противника на другой части Ничейной Земли.",
+      "Сер Давидьяан его оруженосец задержали противника в углу, где практически уничтожили вси силы Некронов, перед тем как половина из них успешно телепортировалась на материнский корабль."
+    ],
+    "narrativeAftermath": "Целью Имперских Рыцарей было уничтожение местных сил Некронов и не смотря на то, что они сумели захватить позицию, ксеносы сумели сохранить достаточное количество боевых единиц, чтобы продолжить свою тиранию на GJ-3378b.",
+    "headerImageUrl": "",
+    "aftermathImageUrl": ""
+  }
+]

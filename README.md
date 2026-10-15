@@ -57,6 +57,24 @@ A static, dependency-free tactical campaign terminal for the *War on the Vespato
 - **Cloud Uplink and live sync:** the Warmaster publishes straight to GitHub from any device. Players auto-sync every 60 seconds or with **↻ RESYNC**.
 - **Mobile / iOS Safari:** at 960px wide or less, the HUD commands fold into a **☰ COMMAND** drawer with 44px touch targets. The Planetary Dossier becomes a bottom sheet: tap or swipe its handle, and it opens automatically when you select a world. The layout respects safe areas (notch, home bar), and inputs use 16px text so iOS doesn't zoom in.
 
+## Battle Chronicles
+
+The HUD's **[ 📜 BATTLE CHRONICLES ]** link opens the campaign's
+[BattleReports archive](BattleReports/index.html). Its **[ 🗺 TACTICAL COGITATOR ]**
+button returns to the map. Both links use relative paths and work locally and under
+the GitHub Pages repository subpath.
+
+This folder is the root of the `TamirlanMamutov/vespator-map-web` Git repository.
+The Pages workflow builds the map into `dist/` and the chronicle into
+`dist/BattleReports/`, then deploys the entire artifact:
+
+- Map: <https://TamirlanMamutov.github.io/vespator-map-web/>
+- Chronicle: <https://TamirlanMamutov.github.io/vespator-map-web/BattleReports/>
+
+The chronicle publishes JSON to `BattleReports/data/battle_reports.json` on `main`
+and images to `BattleReports/assets/reports/`. See its [README](BattleReports/README.md)
+for Warmaster access, roster imports, drafts, and GitHub uplink setup.
+
 ## Run locally (zero install)
 
 ES modules need HTTP, so don't open `index.html` as a `file://` URL.
